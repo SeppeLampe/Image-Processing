@@ -85,10 +85,11 @@ def e1_colour_numba(image):
     rows, cols, colour = image.shape
     result = np.zeros((rows, cols))
     sobel = np.array([[1, 0, -1], [2, 0, -2], [1, 0, -1]])
-    sobel3D = np.zeros((3, 3, 3))
-    sobel3DT = np.zeros((3, 3, 3))
-    sobel3D[0], sobel3D[1], sobel3D[2] = sobel, sobel, sobel
-    sobel3DT[0], sobel3DT[1], sobel3DT[2] = sobel.T, sobel.T, sobel.T
+    sobel3D = np.zeros((3, 3, colour))
+    sobel3DT = np.zeros((3, 3, colour))
+    for channel in range(colour):
+        sobel3D[channel] = sobel
+        sobel3DT[channel] = sobel.T
     # numpy.pad is not supported by numba, so we'll have to do this manually
     pad_img = np.zeros((rows + 2, cols + 2, 3))
     # corners
@@ -185,10 +186,11 @@ def entropy_colour_numba(image):
     rows, cols, colour = image.shape
     result = np.zeros((rows, cols))
     sobel = np.array([[1, 0, -1], [2, 0, -2], [1, 0, -1]])
-    sobel3D = np.zeros((3, 3, 3))
-    sobel3DT = np.zeros((3, 3, 3))
-    sobel3D[0], sobel3D[1], sobel3D[2] = sobel, sobel, sobel
-    sobel3DT[0], sobel3DT[1], sobel3DT[2] = sobel.T, sobel.T, sobel.T
+    sobel3D = np.zeros((3, 3, colour))
+    sobel3DT = np.zeros((3, 3, colour))
+    for channel in range(colour):
+        sobel3D[channel] = sobel
+        sobel3DT[channel] = sobel.T
     # numpy.pad is not supported by numba, so we'll have to do this manually
     pad_img = np.zeros((rows + 2, cols + 2, 3))
     # corners
@@ -213,11 +215,6 @@ def entropy_colour_numba(image):
                 probabilities = probabilities[probabilities != 0]
                 result[row_idx, col_idx] += -(probabilities * np.log2(probabilities)).sum()
     return result
-
-
-@njit
-def segmentation_colour_numba(image):
-    pass
 
 
 @njit
@@ -579,6 +576,7 @@ def reconstruct_row_seam_numba(image, values, seam):
     new_image[:, :, 0], new_image[:, :, 1], new_image[:, :, 2] = new_image_T[:, :, 0].T, new_image_T[:, :,
                                                                                          1].T, new_image_T[:, :, 2].T
     return new_image
+
 
 if __name__ == '__main__':
     """
