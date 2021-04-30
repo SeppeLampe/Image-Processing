@@ -274,48 +274,70 @@ def hog_colour_numba(image):
     return e1 / max_hist_of_grad
 
 
+
 @njit
-def find_vertical_seam(e_matrix, amount=1):
+def find_vertical_seams(e_matrix, amount=1):
     """
     :param e_matrix: The energy representation of an image, should be 2D numpy array
     :param amount: The number of vertical seams to find
     :return:    (0) 2D numpy array, each ROW contains the COLUMN indices of a vertical seam path
-                    In case that 'amount' = 1, a 1D array is returned
-                (1) the total energy of the minimal energy path
+                (1) the total energy of the minimal energy path of the last seam
     """
-    height, width = e_matrix.shape
-    path_e, path = np.zeros((height, width)), np.zeros((height, width))
-    # path_e will store the energy of the minimum energy path available for each pixel,
-    # path will store the column index of the pixel above it with the minimal energy path
-    path_e[0] = e_matrix[0]
-    # Find the minimum energy path (top to bottom) for each pixel
-    for row_idx in range(1, height):
-        for col_idx in range(width):
-            min_nbr_idx = max(0, np.argmin(
-                e_matrix[row_idx - 1, max(0, col_idx - 1):min(col_idx + 2, width)]) + col_idx - 1)
-            path[row_idx, col_idx] = min_nbr_idx
-            path_e[row_idx, col_idx] = e_matrix[row_idx, col_idx] + path_e[row_idx - 1, min_nbr_idx]
+    rows, cols = e_matrix.shape
+    seams = np.zeros((amount, rows))
+    for num in range(amount):
+        # path_e will store the energy of the minimum energy path available for each pixel,
+        # path will store the column index of the pixel above it with the minimal energy path
+        path_e, path = np.zeros((rows, cols)), np.zeros((rows, cols))
+        path_e[0] = e_matrix[0]
+        # Find the minimum energy path (top to bottom) for each pixel
+        for row_idx in range(1, rows):
+            for col_idx in range(cols):
+                # The neighbours are the three pixels above it (border pixels only have two neighbours)
+                neighbours = path_e[row_idx - 1, max(0, col_idx - 1):min(col_idx + 2, cols)]
 
-    # Backtrack the minimal path from bottom to top
-    seam_path = np.zeros((amount, height))  # Will store the row, col indices for pixels in the lowest energy path
-    col_idces = path_e[-1].argsort()[:amount]  # Find the 'amount' pixels with lowest total energy path in the last row
-    seam_path[:, -1] = col_idces
-    for idx, col_idx in enumerate(col_idces):  # For each of the selected starting points
-        for row_idx in range(height - 1, 0, -1):  # Traverse from bottom of paths to top following minimal entropy path
-            seam_path[idx, row_idx - 1] = path[row_idx, col_idx]
-            col_idx = int(path[row_idx - 1, col_idx])
-    return seam_path, np.min(path_e[-1])
+                # If the pixel is already in a seam, then we don't include it anymore
+                if np.isinf(e_matrix[row_idx, col_idx]):
+                    path[row_idx, col_idx] = np.inf
+                    path_e[row_idx, col_idx] = np.inf
+
+                # If all the neighbours are already in seams then we won't be able to use this pixel anymore either
+                elif np.all(np.isinf(neighbours)):
+                    e_matrix[row_idx, col_idx] = np.inf
+                    path[row_idx, col_idx] = np.inf
+                    path_e[row_idx, col_idx] = np.inf
+
+                # The pixel is not yet in a seam and still has 'non-seam' neighbours, let's evaluate it
+                else:
+                    min_nbr_idx = max(0, col_idx + neighbours.argmin() - 1)
+                    path[row_idx, col_idx] = min_nbr_idx
+                    path_e[row_idx, col_idx] = e_matrix[row_idx, col_idx] + path_e[row_idx - 1, min_nbr_idx]
+
+        # Backtrack the minimal path from bottom to top
+        seam_path = np.zeros(rows)  # Stores the column indices for pixels in the lowest energy path
+        col_idx = path_e[-1].argmin()  # Find the pixel with lowest total energy path in the last row
+        seam_path[-1] = col_idx
+        # If we add this pixel to a seam we no longer want to be able to add it to another seam later on
+        e_matrix[-1, col_idx] = np.inf
+        for row_idx in range(rows - 1, 0, -1):  # Traverse from bottom of paths to top following minimal entropy path
+            minimum_neighbour_col_idx = int(path[row_idx, col_idx])
+            seam_path[row_idx - 1] = minimum_neighbour_col_idx
+            # If we add this pixel to a seam we no longer want to be able to add it to another seam later on
+            e_matrix[row_idx - 1, minimum_neighbour_col_idx] = np.inf
+            col_idx = minimum_neighbour_col_idx
+        seams[num] = seam_path
+    return seams, np.min(path_e[-1])
 
 
+@njit
 def find_horizontal_seam(e_matrix, amount=1):
     """
     :param e_matrix: The energy of an image, should be a 2D numpy array
     :param amount: The number of vertical seams to find
-    :return:    (0) 2D numpy array, each ROW contains the ROW indices of a vertical seam path
-                    In case that 'amount' = 1, a 1D array is returned
-                (1) the total energy of the minimal energy path
+    :return:    (0) 2D numpy array, each ROW contains the ROW indices of a horizontal seam path
+                (1) the total energy of the minimal energy path of the last seam
     """
-    return find_vertical_seam(e_matrix.T, amount)
+    return find_vertical_seams(e_matrix.T, amount)
 
 
 def remove_column(image, energy_matrix):
@@ -324,51 +346,48 @@ def remove_column(image, energy_matrix):
     :param energy_matrix: The energy of an image, should be a 2D numpy array
     :return:    (0) the reduced image
                 (1) the values of the pixels that were reduced
-                (2) the ROW indices of the pixels that were removed (seam)
+                (2) the COLUMN indices of the pixels that were removed (seam)
     """
-    seam = find_vertical_seam(energy_matrix)[0][0]
+    seam = find_vertical_seams(energy_matrix)[0][0]
     values = image[np.arange(image.shape[1]) == np.array(seam).reshape(seam.shape[0], 1)].reshape(image.shape[0], 3)
     image = image[np.arange(image.shape[1]) != np.array(seam).reshape(seam.shape[0], 1)].reshape(image.shape[0], -1, 3)
     return image, values, seam
 
 
 @njit
-def remove_column_numba(image, energy_matrix):
+def remove_column_seam_numba(image, seam):
     """
     :param image: RGB image as 3D numpy array
-    :param energy_matrix: The energy of an image, should be a 2D numpy array
+    :param seam: The seam containing the ROW indices that should be removed, should be a 1D numpy array
     :return:    (0) the reduced image
                 (1) the values of the pixels that were reduced
-                (2) the ROW indices of the pixels that were removed (seam)
     """
-    seam = find_vertical_seam(energy_matrix)[0][0]
     values = np.zeros((image.shape[0], 3))
     new_image = np.zeros((image.shape[0], image.shape[1] - 1, 3))
-    for row in range(len(seam)):
-        seam_row_idx = int(seam[row])
-        values[row] = image[row, seam_row_idx]
-        new_image[row, :seam_row_idx] = image[row, :seam_row_idx]
-        new_image[row, seam_row_idx:] = image[row, seam_row_idx + 1:]
-    return new_image.astype(np.uint8), values, seam
+    for row_idx, col_idx in enumerate(seam):
+        col_idx = int(col_idx)
+        values[row_idx] = image[row_idx, col_idx]
+        new_image[row_idx, :col_idx] = image[row_idx, :col_idx]
+        new_image[row_idx, col_idx:] = image[row_idx, col_idx + 1:]
+    return new_image.astype(np.uint8), values
 
 
 @njit
-def remove_row_numba(image, energy_matrix):
+def remove_row_seam_numba(image, seam):
     """
     :param image: RGB image as 3D numpy array
-    :param energy_matrix: The energy of an image, should be a 2D numpy array
+    :param seam: The seam containing the COLUMN indices that should be removed, should be a 1D numpy array
     :return:    (0) the reduced image
                 (1) the values of the pixels that were reduced
-                (2) the COLUMN indices of the pixels that were removed (seam)
     """
     rows, cols, colours = image.shape
     image_T = np.zeros((cols, rows, colours))
     new_image = np.zeros((rows - 1, cols, colours))
     image_T[:, :, 0], image_T[:, :, 1], image_T[:, :, 2] = image[:, :, 0].T, image[:, :, 1].T, image[:, :, 2].T
-    new_image_T, values, seam = remove_column_numba(image_T, energy_matrix.T)
+    new_image_T, values = remove_column_seam_numba(image_T, seam)
     new_image[:, :, 0], new_image[:, :, 1], new_image[:, :, 2] = new_image_T[:, :, 0].T, new_image_T[:, :,
                                                                                          1].T, new_image_T[:, :, 2].T
-    return new_image, values, seam
+    return new_image.astype(np.uint8), values
 
 
 # Passing functions to numba compilated code is quite hard and complicated, so we won't numba compile this function
@@ -385,19 +404,21 @@ def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remov
 
                 Items last in the lists are the most recent removals, items in the front were removed early on.
     """
+    seam = []
+    values = []
+    order = []  # True = row, False = column
     while rows_to_remove > 0 and cols_to_remove > 0:
-        seam = []
-        values = []
-        order = []  # True = row, False = column
         energy_matrix = energy_function(image)
-        row_seam = find_vertical_seam(energy_matrix)[1]
-        column_seam = find_horizontal_seam(energy_matrix)[1]
+        column_seam = find_vertical_seams(energy_matrix)
+        row_seam = find_horizontal_seam(energy_matrix)
         if row_seam[1] <= column_seam[1]:
-            image, new_values, new_seam = remove_row_numba(image, energy_matrix)
+            new_seam = row_seam[0][0]
+            image, new_values = remove_row_seam_numba(image, new_seam)
             order.append(True)
             rows_to_remove -= 1
         else:
-            image, new_values, new_seam = remove_column_numba(image, energy_matrix)
+            new_seam = column_seam[0][0]
+            image, new_values = remove_column_seam_numba(image, new_seam)
             order.append(False)
             cols_to_remove -= 1
         seam.append(new_seam)
@@ -405,7 +426,8 @@ def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remov
 
     while rows_to_remove > 0:  # The columns have already been removed
         energy_matrix = energy_function(image)
-        image, new_values, new_seam = remove_column_numba(image, energy_matrix)
+        new_seam = find_horizontal_seam(energy_matrix)[0][0]
+        image, new_values = remove_row_seam_numba(image, new_seam)
         order.append(True)
         seam.append(new_seam)
         values.append(new_values)
@@ -413,49 +435,58 @@ def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remov
 
     while cols_to_remove > 0:  # The rows have already been removed
         energy_matrix = energy_function(image)
-        image, new_values, new_seam = remove_column_numba(image, energy_matrix)
+        new_seam = find_vertical_seams(energy_matrix)[0][0]
+        image, new_values = remove_column_seam_numba(image, new_seam)
         order.append(False)
         seam.append(new_seam)
         values.append(new_values)
         cols_to_remove -= 1
 
-    return image, values, seam, order
+    return image.astype(np.uint8), values, seam, order
 
 
-
-def add_column_numba(image, seam):
+@njit
+def add_column_seam_numba(image, seams):
     """
     :param image: RGB image as 3D numpy array
-    :param seam: The seam where the addition should happen, 1D numpy array
-    :return:    (0) the increased image
-                (1) the ROW indices of the pixels that were added (seam)
+    :param seams: The seams where the addition should happen, 2D numpy array
+    :return: the increased image
     """
-    new_image = np.zeros((image.shape[0], image.shape[1] + 1, 3))
-    for row in range(len(seam)):
-        seam_row_idx = int(seam[row])
-        if not seam_row_idx:  # If the index = 0
-            seam_row_idx += 1
-        new_values = image[row, seam_row_idx-1]/2 + image[row, seam_row_idx]/2  # Divide before addition to prevent integer overflow
-        new_image[row, :seam_row_idx] = image[row, :seam_row_idx]
-        new_image[row, seam_row_idx] = new_values
-        new_image[row, seam_row_idx+1:] = image[row, seam_row_idx:]
+    # We cannot simply start adding the seams as adding a column, will alter the indices to the right of that added
+    # column. So in order to prevent this, we will traverse row by row and perform the additions/insertions right
+    # to left. This allows us to insert the pixels at the places where they were intended. We'll start by transposing
+    # 'new_seams' so that each row of this matrix now contains the column values of that row
+    # where an insertion should happen.
+    rows, cols, colours = image.shape
+    columns_to_add = len(seams)
+    new_image = np.zeros((rows, cols+columns_to_add, colours))
+    seams = seams.T
+    for row_idx, row in enumerate(seams):
+        new_row = np.zeros((cols + columns_to_add, colours))
+        row = np.sort(row)
+        previous_index = 0
+        for col_num, col_idx in enumerate(row):
+            col_idx = int(col_idx)
+            new_row[previous_index + col_num:col_idx + col_num] = image[row_idx, previous_index:col_idx]
+            new_row[col_idx + col_num] = image[row_idx, col_idx - 1] / 2 + image[row_idx, col_idx] / 2
+            previous_index = col_idx
+        new_row[previous_index + col_num+1::] = image[row_idx, previous_index::]
+        new_image[row_idx] = new_row
     return new_image.astype(np.uint8)
 
 
 @njit
-def add_row_numba(image, seam):
+def add_row_seam_numba(image, seams):
     """
     :param image: RGB image as 3D numpy array
-    :param energy_matrix: The energy of an image, should be a 2D numpy array
-    :return:    (0) the increased image
-                (1) the COLUMN indices of the pixels that were added (seam)
+    :param seams: The horizontal seams of the image, should be a 2D numpy array
+    :return: the increased image
     """
-
     rows, cols, colours = image.shape
     image_T = np.zeros((cols, rows, colours))
     new_image = np.zeros((rows + 1, cols, colours))
     image_T[:, :, 0], image_T[:, :, 1], image_T[:, :, 2] = image[:, :, 0].T, image[:, :, 1].T, image[:, :, 2].T
-    new_image_T = add_column_numba(image_T, seam)
+    new_image_T = add_column_seam_numba(image_T, seams)
     new_image[:, :, 0], new_image[:, :, 1], new_image[:, :, 2] = new_image_T[:, :, 0].T, new_image_T[:, :,
                                                                                          1].T, new_image_T[:, :, 2].T
     return new_image
@@ -473,19 +504,22 @@ def add_columns(image, energy_function, columns_to_add=1):
                 Items last in the lists are the most recent additions, items in the front were added early on.
     """
     seams = []
+    # The denominator can be tuned manually, if one wants to find too much seams at the same time
+    # then it might be possible 'to run out of possible seams'. In theory, in a square image, three diagonal, adjacent
+    # seams would already prevent any more seams to be found. You run into a sort of integer overflow when this happens
+    # to you. So be wary of trying to add too much rows at a time! The higher the denominator, the less chance this has
+    # of happening but also the higher the 'stretching artifacts' in the image will be. Perhaps we might include a check
+    # to the 'find_vertical_seams' function to catch this.
+    denominator = 4
     while columns_to_add > 0:
-        if columns_to_add >= image.shape[0]//2:
-            amount = image.shape[0]//2
+        if columns_to_add >= image.shape[0]//denominator:
+            amount = image.shape[0]//denominator
         else:
             amount = columns_to_add
         energy_matrix = energy_function(image)
-        new_seams = find_vertical_seam(energy_matrix, amount=amount)[0]
-        for seam in new_seams:
-            image = add_column_numba(image, seam)
-        if seams:
-            seams += new_seams
-        else:
-            seams = new_seams
+        new_seams = find_vertical_seams(energy_matrix, amount=amount)[0]
+        image = add_column_seam_numba(image, new_seams)
+        seams.extend(new_seams)
         columns_to_add -= amount
 
     return image.astype(np.uint8), seams
@@ -511,6 +545,41 @@ def add_rows(image, energy_function, rows_to_add=1):
     return new_image.astype(np.uint8), seams
 
 
+@njit
+def reconstruct_column_seam_numba(image, values, seam):
+    """
+    :param image: RGB image as 3D numpy array
+    :param seam: The seam where the addition should happen, 1D numpy array
+    :return:    (0) the increased image
+                (1) the ROW indices of the pixels that were added (seam)
+    """
+    new_image = np.zeros((image.shape[0], image.shape[1] + 1, 3))
+    for row_idx, col_idx in enumerate(seam):
+        col_idx = int(col_idx)
+        if not col_idx:  # If the index = 0
+            col_idx += 1
+        new_image[row_idx, :col_idx] = image[row_idx, :col_idx]
+        new_image[row_idx, col_idx] = values[row_idx]
+        new_image[row_idx, col_idx+1:] = image[row_idx, col_idx:]
+    return new_image.astype(np.uint8)
+
+
+@njit
+def reconstruct_row_seam_numba(image, values, seam):
+    """
+    :param image: RGB image as 3D numpy array
+    :param seam: The horizontal seam of the image, should be a 1D numpy array
+    :return: the increased image
+    """
+    rows, cols, colours = image.shape
+    image_T = np.zeros((cols, rows, colours))
+    new_image = np.zeros((rows + 1, cols, colours))
+    image_T[:, :, 0], image_T[:, :, 1], image_T[:, :, 2] = image[:, :, 0].T, image[:, :, 1].T, image[:, :, 2].T
+    new_image_T = reconstruct_column_seam_numba(image_T, values, seam)
+    new_image[:, :, 0], new_image[:, :, 1], new_image[:, :, 2] = new_image_T[:, :, 0].T, new_image_T[:, :,
+                                                                                         1].T, new_image_T[:, :, 2].T
+    return new_image
+
 if __name__ == '__main__':
     """
     The code below is for testing and visualizing the seam carving functions
@@ -533,7 +602,7 @@ if __name__ == '__main__':
 
     e1 = e1_colour_numba(im)
 
-    vertical_seam = find_vertical_seam(e1)[0][0]
+    vertical_seam = find_vertical_seams(e1)[0][0]
     horizontal_seam = find_horizontal_seam(e1)[0][0]
 
     for row, col in enumerate(vertical_seam):  # This is just to visualize the vertical seam
