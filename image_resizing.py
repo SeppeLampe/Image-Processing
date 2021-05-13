@@ -4,40 +4,36 @@ import numpy as np
 from scipy.signal import convolve, convolve2d
 from skimage.io import imshow
 import argparse
-from seam_carving import e1_col, remove_column, remove_row, find_vertical_seam, find_horizontal_seam
+import seam_carving as sc
+from SeamImage import SeamImage
 import os
 
-def resize(image, width_diff, height_diff):
+def resize(image, width_diff, height_diff, energy_function):
     """
     :param image: RGB image as 3D numpy array
-    :param width_diff: the number of columns to be added or removed
-    :param height_diff: the number of rows to be added or removed
-    :return: the reduced image
+    :param width_diff: the number of columns to be added (if negative) or removed (if positive)
+    :param height_diff: the number of rows to be added (if negative) or removed (if positive)
+    :return: the modified image
     """
-    
-    # First remove columns or add columns depending on the case
-    for x in range(abs(width_diff)):
-        if width_diff > 0:
-            image = remove_column(image, e1_col)[0]
-            print(f'Removed {x+1} columns')
-        else:
-            #image = add_column(image, e1_col)[0]
-            print(f'Added {x+1} columns')
 
-    print(image.shape)
+    # Create a SeamImage object
+    my_seam_image = SeamImage(image)
 
-    # Remove rowss or add rows depending on the case
-    for x in range(abs(height_diff)):
-        if height_diff > 0:
-            image = remove_row(image, e1_col)[0]
-            print(f'Removed {x+1} rows')
-        else:
-            #image = add_row(image, e1_col)[0]
-            print(f'Added {x+1} rows')
+    # Energy function can be e1_colour_numba, entropy_colour_numba or hog_colour_numba
+    if height_diff >= 0 and width_diff >= 0:
+        my_seam_image.remove_rows_and_cols(energy_function=energy_function, rows=height_diff, cols=width_diff) # Remove both columns and rows
+    elif height_diff < 0 and width_diff < 0:
+        my_seam_image.add_rows_and_cols(energy_function=energy_function, rows=-height_diff, cols=-width_diff) # Add both columns and rows
+    elif height_diff >= 0 and width_diff < 0:
+        my_seam_image.remove_rows_and_cols(energy_function=energy_function, rows=height_diff, cols=0) # Remove rows
+        my_seam_image.add_rows_and_cols(energy_function=energy_function, rows=0, cols=-width_diff) # Add columns
+    else:
+        my_seam_image.remove_rows_and_cols(energy_function=energy_function, rows=0, cols=width_diff) # Remove columns
+        my_seam_image.add_rows_and_cols(energy_function=energy_function, rows=-height_diff, cols=0) # Add rows
 
-    print(image.shape)
+    print(my_seam_image.image.shape)
 
-    return image
+    return my_seam_image.image
 
 
 
@@ -47,9 +43,10 @@ if __name__ == '__main__':
     """
     parser = argparse.ArgumentParser(description='This code is for resizing images using seam carving')
 
-    parser.add_argument("--input_image", default='Broadway_tower_edit.jpg', type=str, help='Specify the input image to be resized')
-    parser.add_argument("--output_image_width", default=1400, type=int, help='Specify the width of the output image in pixels')
-    parser.add_argument("--output_image_height", default=968, type=int, help='Specify the height of the output image in pixels')
+    parser.add_argument("--input_image", default='Figures\Dolphin.jpg', type=str, help='Specify the input image to be resized')
+    parser.add_argument("--output_image_width", default=255, type=int, help='Specify the width of the output image in pixels')
+    parser.add_argument("--output_image_height", default=220, type=int, help='Specify the height of the output image in pixels')
+    parser.add_argument("--energy_function", default='e1_colour_numba', type=str, help='Specify the energy function to be used for seam carving. Can be e1_colour_numba, entropy_colour, entropy_colour_numba, hog_colour_numba')
 
     args = parser.parse_args()
 
@@ -61,9 +58,17 @@ if __name__ == '__main__':
     width_diff = input_width - args.output_image_width
     height_diff = input_height - args.output_image_height
 
-    output_with_sc = resize(im, width_diff, height_diff)
+    if args.energy_function == 'e1_colour_numba':
+        energy_function = sc.e1_colour_numba
+    elif args.energy_function == 'entropy_colour':
+        energy_function = sc.entropy_colour
+    elif args.energy_function == 'entropy_colour_numba':
+        energy_function = sc.entropy_colour_numba
+    elif args.energy_function == 'hog_colour_numba':
+        energy_function = sc.hog_colour_numba
+
+    output_with_sc = resize(im, width_diff, height_diff, energy_function)
     output_regular = cv2.resize(im, (args.output_image_width, args.output_image_height))
-    
 #    plt.imshow(output_image)
 #    plt.show()
 #    plt.close()
@@ -72,7 +77,7 @@ if __name__ == '__main__':
     output_file_name_with_sc = args.input_image.replace(ext, '_resized_with_seamcarving.png')
     output_file_name_regular = args.input_image.replace(ext, '_resized_without_seamcarving.png')
 
-    output_image_bgr_sc = cv2.cvtColor(output_with_sc, cv2.COLOR_RGB2BGR)
+    output_image_bgr_sc = cv2.cvtColor(output_with_sc, cv2.COLOR_RGB2BGR) #converted again to use in imwrite
     cv2.imwrite(output_file_name_with_sc, output_image_bgr_sc)
 
     output_image_bgr_regular = cv2.cvtColor(output_regular, cv2.COLOR_RGB2BGR)
