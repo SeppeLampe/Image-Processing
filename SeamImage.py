@@ -72,24 +72,8 @@ class SeamImage:
             self.added_seams.extend(new_seams)
             self.added_order.extend([False for _ in range(cols)])
 
-    # Always add new rows to the image, needed for the removal
-    def add_always_new_rows(self, energy_function=sc.e1_colour, rows=0 ):
-        print('Rows: ', rows)
-        print('Image: ', self.image.shape  )
-
-
-        self.image, new_seams = sc.add_rows(self.image, energy_function, rows)
-        print('new_seams: ', new_seams.shape)
-        self.added_seams.extend(new_seams)
-        self.added_order.extend([True for _ in range(rows)])
-
-    # Always add new cols to the image, needed for the removal
-    def add_always_new_cols(self, energy_function=sc.e1_colour, cols=0 ):
-        self.image, new_seams = sc.add_columns(self.image, energy_function, cols)
-        self.added_seams.extend(new_seams)
-        self.added_order.extend([False for _ in range(cols)])
-
-    def always_add(self, energy_function=sc.e1_colour, rows=0, cols=0):
+    # Always add new rows or columns to the image, needed for the removal
+    def always_add_rows_or_columns(self, energy_function=sc.e1_colour, rows=0, cols=0):
         # Add the amount of rows to the image that remain to be added
         if rows > 0:
             self.image, new_seams = sc.add_rows(self.image, energy_function, rows)
