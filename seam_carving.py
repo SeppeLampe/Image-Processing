@@ -388,7 +388,7 @@ def remove_row_seam_numba(image, seam):
 
 
 # Passing functions to numba compilated code is quite hard and complicated, so we won't numba compile this function
-def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remove=0):
+def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remove=0, mask=False ):
     """
     :param image: RGB image as 3D numpy array
     :param energy_function: An energy function (e1_colour_numba, entropy_colour_numba or hog_colour_numba) to apply
@@ -423,8 +423,14 @@ def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remov
 
     while rows_to_remove > 0:  # The columns have already been removed
         energy_matrix = energy_function(image)
+        if ( type(mask) != type(False) ): # Change the energy values to be removed under the masked area
+            energy_matrix_modification_with_masking(energy_matrix,mask)
+
         new_seam = find_horizontal_seam(energy_matrix)[0][0]
         image, new_values = remove_row_seam_numba(image, new_seam)
+
+        mask, non = remove_row_seam_numba(mask, new_seam) # Decrease the size of the mask
+
         order.append(True)
         seam.append(new_seam)
         values.append(new_values)
@@ -432,14 +438,30 @@ def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remov
 
     while cols_to_remove > 0:  # The rows have already been removed
         energy_matrix = energy_function(image)
+        if ( type(mask) != type(False) ): # Change the energy values to be removed under the masked area
+            energy_matrix_modification_with_masking(energy_matrix,mask)
+
+
         new_seam = find_vertical_seams(energy_matrix)[0][0]
         image, new_values = remove_column_seam_numba(image, new_seam)
+
+        mask, non = remove_column_seam_numba(mask, new_seam) # Decrease the size of the mask
+
         order.append(False)
         seam.append(new_seam)
         values.append(new_values)
         cols_to_remove -= 1
 
     return image.astype(np.uint8), values, seam, order
+
+
+MAX_ENERGY = 99999
+def energy_matrix_modification_with_masking( energy_matrix, mask):
+        H_mask, W_mask, dim = mask.shape
+        for i in range(H_mask):
+            for j in range(W_mask):
+                if (mask[i][j][0] == 1):
+                    energy_matrix[i][j] = -MAX_ENERGY
 
 
 @njit

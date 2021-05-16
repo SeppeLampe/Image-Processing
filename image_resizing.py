@@ -69,9 +69,9 @@ if __name__ == '__main__':
 
     output_with_sc = resize(im, width_diff, height_diff, energy_function)
     output_regular = cv2.resize(im, (args.output_image_width, args.output_image_height))
-#    plt.imshow(output_image)
-#    plt.show()
-#    plt.close()
+    plt.imshow(output_with_sc)
+    plt.show()
+    plt.close()
 
     _, ext = os.path.splitext(args.input_image)
     output_file_name_with_sc = args.input_image.replace(ext, '_resized_with_seamcarving.png')
