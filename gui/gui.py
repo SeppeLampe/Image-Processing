@@ -6,7 +6,7 @@ from tkinter import filedialog
 import cv2
 import imutils
 import numpy as np
-from PIL import ImageTk, Image
+from PIL import ImageTk, Image, ImageDraw
 
 DEFAULT_IMAGE = '..\\Figures\\Castle.jpg'
 
@@ -51,7 +51,7 @@ class SeamCarvingGUI(tk.Frame):
         height_label.pack(side=tk.LEFT)
         height_entry.pack(side=tk.LEFT)
 
-        execute_resize_button = tk.Button(resize_frame, text="Execute")  # , command=self.todo)
+        execute_resize_button = tk.Button(resize_frame, text="Execute", command=self.resize_image)
         execute_resize_button.pack(side=tk.LEFT)
 
         reset_resize_button = tk.Button(resize_frame, text="Reset", command=self.reset_img)
@@ -72,7 +72,7 @@ class SeamCarvingGUI(tk.Frame):
         red_button = tk.Button(retarget_frame, text="GREEN", fg="green", command=self.select_green)
         red_button.pack(side=tk.LEFT)
 
-        execute_retarget_button = tk.Button(retarget_frame, text="Execute")  # , command=self.todo)
+        execute_retarget_button = tk.Button(retarget_frame, text="Execute", command=self.retarget_image)
         execute_retarget_button.pack(side=tk.LEFT)
 
         reset_retarget_button = tk.Button(retarget_frame, text="Reset", command=self.reset_img)
@@ -96,6 +96,10 @@ class SeamCarvingGUI(tk.Frame):
         self.lasx, self.lasy = None, None
         self.orig_img = None
         self.color = 'red'
+        self.color_code = (255, 0, 0)
+
+        self.ghost_image = Image.new("RGB", (400, 400), (0, 0, 0))
+        self.draw = ImageDraw.Draw(self.ghost_image)
 
     def add_image(self):
         img_path = filedialog.askopenfilename(initialdir=os.path.join(os.getcwd(), '..'), title="Open Image",
@@ -112,6 +116,8 @@ class SeamCarvingGUI(tk.Frame):
         self.width_var.set(width)
         self.height_var.set(height)
         self.orig_img = cv_img
+        self.ghost_image = self.ghost_image.resize((width, height))
+        self.draw = ImageDraw.Draw(self.ghost_image)
         self.image = ImageTk.PhotoImage(Image.fromarray(cv_img))
         self.canvas.config(width=width, height=height)
         self.canvas.itemconfig(self.image_on_canvas, image=self.image, anchor='nw')
@@ -121,19 +127,42 @@ class SeamCarvingGUI(tk.Frame):
         if self.orig_img is not None:
             self.image = ImageTk.PhotoImage(Image.fromarray(self.orig_img))
             self.canvas.itemconfig(self.image_on_canvas, image=self.image, anchor='nw')
+            height, width, _ = self.orig_img.shape
+            self.width_var.set(width)
+            self.height_var.set(height)
 
     def select_red(self):
         self.color = 'red'
+        self.color_code = (255, 0, 0)
 
     def select_green(self):
         self.color = 'green'
+        self.color_code = (0, 255, 0)
 
     def get_x_and_y(self, event):
         self.lasx, self.lasy = event.x, event.y
 
     def draw_smth(self, event):
         self.canvas.create_line((self.lasx, self.lasy, event.x, event.y), fill=self.color, width=10, tag="line")
+        self.draw.line([self.lasx, self.lasy, event.x, event.y], width=10, fill=self.color_code)
         self.lasx, self.lasy = event.x, event.y
+
+    def resize_image(self):
+        target_width = self.width_var.get()
+        target_height = self.height_var.get()
+        print('Width: {0} Height: {1}'.format(target_width, target_height))
+        # TODO do something with these and return a cv2 image
+        # self.image = ImageTk.PhotoImage(Image.fromarray(<RESULT HERE>))
+        # self.canvas.itemconfig(self.image_on_canvas, image=self.image, anchor='nw')
+
+    def retarget_image(self):
+        mask = self.ghost_image
+        r, g, b = cv2.split(np.array(mask))
+        red_mask = np.where(r, 1, 0)
+        green_mask = np.where(g, 1, 0)
+        # TODO do something with these and return a cv2 image
+        # self.image = ImageTk.PhotoImage(Image.fromarray(<RESULT HERE>))
+        # self.canvas.itemconfig(self.image_on_canvas, image=self.image, anchor='nw')
 
 
 if __name__ == '__main__':
