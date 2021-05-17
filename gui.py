@@ -8,7 +8,7 @@ import imutils
 import numpy as np
 from PIL import ImageTk, Image, ImageDraw
 
-DEFAULT_IMAGE = '..\\Figures\\Castle.jpg'
+DEFAULT_IMAGE = 'Figures\\Castle.jpg'
 
 
 class SeamCarvingGUI(tk.Frame):
@@ -102,7 +102,8 @@ class SeamCarvingGUI(tk.Frame):
         self.draw = ImageDraw.Draw(self.ghost_image)
 
     def add_image(self):
-        img_path = filedialog.askopenfilename(initialdir=os.path.join(os.getcwd(), '..'), title="Open Image",
+        self.canvas.delete("line")
+        img_path = filedialog.askopenfilename(initialdir=os.getcwd(), title="Open Image",
                                               filetypes=[("Image Files", "*.png *.jpg *.jpeg")])
         self.file_path.set(img_path)
         cv_img = cv2.imread(img_path)
