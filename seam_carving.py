@@ -104,7 +104,7 @@ def e1_colour_numba(image):
         for col_idx in range(cols):
             grid = pad_img[row_idx:row_idx + 3, col_idx:col_idx + 3]
             result[row_idx, col_idx] += sqrt(np.sum(sobel3D * grid.T) ** 2 + np.sum(sobel3DT * grid.T) ** 2) / 3
-    return result
+    return result.astype(np.float32)
 
 
 def entropy_helper(grid):
@@ -271,7 +271,6 @@ def hog_colour_numba(image):
     return e1 / max_hist_of_grad
 
 
-
 @njit
 def find_vertical_seams(e_matrix, amount=1):
     """
@@ -327,7 +326,7 @@ def find_vertical_seams(e_matrix, amount=1):
 
 
 @njit
-def find_horizontal_seam(e_matrix, amount=1):
+def find_horizontal_seams(e_matrix, amount=1):
     """
     :param e_matrix: The energy of an image, should be a 2D numpy array
     :param amount: The number of vertical seams to find
@@ -366,7 +365,7 @@ def remove_column_seam_numba(image, seam):
         values[row_idx] = image[row_idx, col_idx]
         new_image[row_idx, :col_idx] = image[row_idx, :col_idx]
         new_image[row_idx, col_idx:] = image[row_idx, col_idx + 1:]
-    return new_image.astype(np.uint8), values
+    return new_image.astype(np.int16), values
 
 
 @njit
@@ -384,7 +383,32 @@ def remove_row_seam_numba(image, seam):
     new_image_T, values = remove_column_seam_numba(image_T, seam)
     new_image[:, :, 0], new_image[:, :, 1], new_image[:, :, 2] = new_image_T[:, :, 0].T, new_image_T[:, :,
                                                                                          1].T, new_image_T[:, :, 2].T
-    return new_image.astype(np.uint8), values
+    return new_image.astype(np.int16), values
+
+
+def remove_mask(image, energy_function, mask):
+    mask = mask.astype(np.int16)
+    # Find the row and column indices which contain at least one pixel to be removed
+    mask_rows, mask_cols = np.where(mask.any(axis=1))[0], np.where(mask.any(axis=0))[0]
+    mask_height = np.max(mask_rows) - np.min(mask_rows)
+    mask_width = np.max(mask_cols) - np.min(mask_cols)
+    if mask_height >= mask_width:
+        seam_find_function = find_vertical_seams
+        seam_remove_function = remove_column_seam_numba
+    else:
+        seam_find_function = find_horizontal_seams
+        seam_remove_function = remove_row_seam_numba
+    mask *= -10000  # Assign a value of -10000 to each pixel in the mask
+    mask_3d = np.zeros((mask.shape[0], mask.shape[1], 3))
+    mask_3d[:, :, 0], mask_3d[:, :, 1], mask_3d[:, :, 2] = mask, mask, mask
+    while np.any(mask_3d):
+        e_matrix = energy_function(image)
+        # By adding mask3d, the seams will preferentially include pixels in the mask since they have a value of -10000
+        e_matrix += mask_3d[:, :, 0]
+        seam = seam_find_function(e_matrix)[0][0]
+        image = seam_remove_function(image, seam)[0]
+        mask_3d = seam_remove_function(mask_3d, seam)[0]
+    return image
 
 
 # Passing functions to numba compilated code is quite hard and complicated, so we won't numba compile this function
@@ -407,7 +431,7 @@ def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remov
     while rows_to_remove > 0 and cols_to_remove > 0:
         energy_matrix = energy_function(image)
         column_seam = find_vertical_seams(energy_matrix)
-        row_seam = find_horizontal_seam(energy_matrix)
+        row_seam = find_horizontal_seams(energy_matrix)
         if row_seam[1] <= column_seam[1]:
             new_seam = row_seam[0][0]
             image, new_values = remove_row_seam_numba(image, new_seam)
@@ -423,7 +447,7 @@ def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remov
 
     while rows_to_remove > 0:  # The columns have already been removed
         energy_matrix = energy_function(image)
-        new_seam = find_horizontal_seam(energy_matrix)[0][0]
+        new_seam = find_horizontal_seams(energy_matrix)[0][0]
         image, new_values = remove_row_seam_numba(image, new_seam)
         order.append(True)
         seam.append(new_seam)
@@ -601,7 +625,7 @@ if __name__ == '__main__':
     e1 = e1_colour_numba(im)
 
     vertical_seam = find_vertical_seams(e1)[0][0]
-    horizontal_seam = find_horizontal_seam(e1)[0][0]
+    horizontal_seam = find_horizontal_seams(e1)[0][0]
 
     for row, col in enumerate(vertical_seam):  # This is just to visualize the vertical seam
         im[int(row), int(col)] = (255, 0, 0)
