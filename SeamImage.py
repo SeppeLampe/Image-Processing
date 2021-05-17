@@ -102,7 +102,7 @@ class SeamImage:
         :param energy_function: an energy function to apply for the seam carving
         :param height: The height of the new image
         :param width: The width of the new image
-        :return:
+        :return: Nothing
         """
         rows, cols = height-self.image.shape[0], width-self.image.shape[1]
         # Add rows and columns
@@ -133,17 +133,28 @@ class SeamImage:
         if keep_shape:
             self.resize(energy_function, original_rows, original_cols)
 
-    def amplify_content(self):
-        # First double the image in size (content-unaware)
-        # Then content-aware resize it back to its original shape
-        pass
+    def amplify_content(self, amp_factor=1.2):
+        """
+        First scales the image in size (content-unaware) given by amp_factor
+        Then content-aware resize it back to its original shape
+        :param amp_factor: amplification factor for the image
+        :return: Nothing
+        """
+        # Simply scale the image first
+        self.image = cv2.resize(self.image, (int(self.image.shape[1]*amp_factor), int(self.image.shape[0]*amp_factor)))
+        
+        # Rescale it back to original size with seam carving
+        self.remove_rows_and_cols(rows=int(self.image.shape[0] - self.original_shape[0]), cols=int(self.image.shape[1] - self.original_shape[1]))
 
 
 if __name__ == '__main__':
     my_seam_image = SeamImage(location=".\\Figures\\Castle.jpg")
     imshow(my_seam_image.image)
     plt.show()
-
+    my_seam_image.amplify_content(1.2)
+    output_amplified = cv2.cvtColor(my_seam_image.image, cv2.COLOR_RGB2BGR)
+    cv2.imwrite('.\\Figures\\Castle_amplified.jpg', output_amplified)
+    
     mask = cv2.imread('.\\Figures\\Castle_masked_person.jpg', cv2.IMREAD_GRAYSCALE)
     _, mask = cv2.threshold(mask, 50, 1, cv2.THRESH_BINARY)
     start = time.time()
