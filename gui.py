@@ -44,6 +44,8 @@ class SeamCarvingGUI(tk.Frame):
         self.width_var = tk.IntVar()
         self.height_var = tk.IntVar()
         self.keep_shape_var = tk.IntVar()
+        self.factor_var = tk.DoubleVar(value=1.2)
+        self.output_img_name = tk.StringVar(value='result')
 
         # Initialize GUI elements
         self.initialize_gui()
@@ -62,6 +64,7 @@ class SeamCarvingGUI(tk.Frame):
 
          The 'top frame' contains multiple functional components for interaction.
          The 'bottom frame' contains the image display.
+         :return: Nothing
         """
         top_frame = tk.Frame(self)
         top_frame.pack(side=tk.TOP, expand=True)
@@ -77,8 +80,8 @@ class SeamCarvingGUI(tk.Frame):
         label.pack(side=tk.LEFT)
 
         # Separator lines are used between sections for better visibility
-        separator1 = ttk.Separator(top_frame, orient='horizontal')
-        separator1.pack(fill=tk.X)
+        separator = ttk.Separator(top_frame, orient='horizontal')
+        separator.pack(fill=tk.X)
 
         # Second section in the top frame contains elements related to resizing the image
         resize_frame = tk.Frame(top_frame)
@@ -106,8 +109,8 @@ class SeamCarvingGUI(tk.Frame):
         reset_resize_button.pack(side=tk.LEFT)
 
         # Separator lines are used between sections for better visibility
-        separator2 = ttk.Separator(top_frame, orient='horizontal')
-        separator2.pack(fill=tk.X)
+        separator = ttk.Separator(top_frame, orient='horizontal')
+        separator.pack(fill=tk.X)
 
         # Third section in the top frame contains elements related to object removal
         obj_remove_frame = tk.Frame(top_frame)
@@ -132,8 +135,8 @@ class SeamCarvingGUI(tk.Frame):
         reset_remove_obj_button.pack(side=tk.LEFT)
 
         # Separator lines are used between sections for better visibility
-        separator3 = ttk.Separator(top_frame, orient='horizontal')
-        separator3.pack(fill=tk.X)
+        separator = ttk.Separator(top_frame, orient='horizontal')
+        separator.pack(fill=tk.X)
 
         # Fourth section in the top frame contains elements related to content amplification
         content_ampl_frame = tk.Frame(top_frame)
@@ -142,11 +145,38 @@ class SeamCarvingGUI(tk.Frame):
         label = tk.Label(content_ampl_frame, text='Amplify content', width=15, anchor='w', font='Helvetica 14 bold')
         label.pack(side=tk.LEFT)
 
+        factor_label = tk.Label(content_ampl_frame, text="Amplification factor:")
+        factor_label.pack(side=tk.LEFT)
+
+        factor_entry = tk.Entry(content_ampl_frame, textvariable=self.factor_var)
+        factor_entry.pack(side=tk.LEFT)
+
         execute_amplify_button = tk.Button(content_ampl_frame, text="Execute", command=self.amplify_content)
         execute_amplify_button.pack(side=tk.LEFT)
 
         reset_amplify_button = tk.Button(content_ampl_frame, text="Reset", command=self.reset_img)
         reset_amplify_button.pack(side=tk.LEFT)
+
+        # Separator lines are used between sections for better visibility
+        separator = ttk.Separator(top_frame, orient='horizontal')
+        separator.pack(fill=tk.X)
+
+        # Fourth section in the top frame contains elements related to content amplification
+        save_frame = tk.Frame(top_frame)
+        save_frame.pack(side=tk.TOP, expand=True, fill=tk.X)
+
+        output_label = tk.Label(save_frame, text="Output image name:")
+        output_label.pack(side=tk.LEFT)
+
+        output_entry = tk.Entry(save_frame, textvariable=self.output_img_name)
+        output_entry.pack(side=tk.LEFT)
+
+        save_button = tk.Button(save_frame, text="Save result", command=self.save_image)
+        save_button.pack(side=tk.LEFT)
+
+        # Separator lines are used between sections for better visibility
+        separator = ttk.Separator(top_frame, orient='horizontal')
+        separator.pack(fill=tk.X)
 
         # Bottom frame contains a canvas for displaying the image and drawing
         canvas_frame = tk.Frame(top_frame)
@@ -165,6 +195,7 @@ class SeamCarvingGUI(tk.Frame):
     def add_image(self):
         """
         This method solves selecting an image file and displaying it in the GUI
+        :return: Nothing
         """
         # If there was previous drawing on the canvas, remove it
         self.canvas.delete("line")
@@ -181,6 +212,7 @@ class SeamCarvingGUI(tk.Frame):
     def reset_img(self):
         """
         Reset functionality discards any modification done to the original image
+        :return: Nothing
         """
         # Delete any drawing from the canvas
         self.canvas.delete("line")
@@ -193,6 +225,7 @@ class SeamCarvingGUI(tk.Frame):
     def post_process(self):
         """
         This method adjusts the GUI elements to any resizing change that was done to the displayed image
+        :return: Nothing
         """
         # Get the height and weight and we don't care about the number of channels
         height, width, _ = self.seam_image.get_image().shape
@@ -214,6 +247,7 @@ class SeamCarvingGUI(tk.Frame):
     def select_red(self):
         """
         Set drawing color to red
+        :return: Nothing
         """
         self.color = 'red'
         self.color_code = (255, 0, 0)
@@ -221,6 +255,7 @@ class SeamCarvingGUI(tk.Frame):
     def select_green(self):
         """
         Set drawing color to green
+        :return: Nothing
         """
         self.color = 'green'
         self.color_code = (0, 255, 0)
@@ -229,6 +264,7 @@ class SeamCarvingGUI(tk.Frame):
         """
         Update the last registered coordinates of a mouse event
         :param event: I/O event, in out case a mouse click
+        :return: Nothing
         """
         self.last_x, self.last_y = event.x, event.y
 
@@ -236,6 +272,7 @@ class SeamCarvingGUI(tk.Frame):
         """
         Draw onto the image canvas
         :param event: I/O event, in out case a mouse drag
+        :return: Nothing
         """
         # Our drawing will be simulated by repeatedly drawing a line
         # between the previous mouse location and the current one
@@ -248,6 +285,7 @@ class SeamCarvingGUI(tk.Frame):
     def resize_image(self):
         """
         Method for executing the resize via seam carving functionality
+        :return: Nothing
         """
         # Check for proper numeric input and warn the user otherwise
         try:
@@ -274,6 +312,7 @@ class SeamCarvingGUI(tk.Frame):
     def remove_object_image(self):
         """
         Use seam carving to remove objects from the image
+        :return: Nothing
         """
         # The ghost image contains the drawn red and green areas and black in the rest
         color_mask = self.ghost_image
@@ -294,10 +333,38 @@ class SeamCarvingGUI(tk.Frame):
     def amplify_content(self):
         """
         Amplify content via seam carving
+        :return: Nothing
         """
-        self.seam_image.amplify_content()
+        # Check for proper numeric input and warn the user otherwise
+        try:
+            # Retrieve input factor
+            target_factor = self.factor_var.get()
+
+            # Check for positive input and warn the user otherwise
+            if target_factor < 1:
+                messagebox.showerror("Error!", "Please input a value greater than 1!")
+                return
+
+            # Call the seam carving function
+            self.seam_image.amplify_content(target_factor)
+            # Update display
+            self.post_process()
+        except tk.TclError:
+            messagebox.showerror("Error!", "Factor must be numeric value!")
+
         # Update display
         self.post_process()
+
+    def save_image(self):
+        """
+        Save result image on disk
+        :return: Nothing
+        """
+        output_file_name = self.output_img_name.get() + '.png'
+        image = self.seam_image.get_image().astype(np.uint8)
+        # The returned image is in BGR
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        cv2.imwrite(output_file_name, image)
 
 
 if __name__ == '__main__':
