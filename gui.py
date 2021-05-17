@@ -7,6 +7,7 @@ import cv2
 import imutils
 import numpy as np
 from PIL import ImageTk, Image, ImageDraw
+from SeamImage import *
 
 DEFAULT_IMAGE = 'Figures\\Castle.jpg'
 
@@ -94,43 +95,39 @@ class SeamCarvingGUI(tk.Frame):
         self.canvas.bind("<B1-Motion>", self.draw_smth)
 
         self.lasx, self.lasy = None, None
-        self.orig_img = None
         self.color = 'red'
         self.color_code = (255, 0, 0)
 
         self.ghost_image = Image.new("RGB", (400, 400), (0, 0, 0))
         self.draw = ImageDraw.Draw(self.ghost_image)
+        self.seam_image = None
 
     def add_image(self):
         self.canvas.delete("line")
+
         img_path = filedialog.askopenfilename(initialdir=os.getcwd(), title="Open Image",
                                               filetypes=[("Image Files", "*.png *.jpg *.jpeg")])
-        self.file_path.set(img_path)
-        cv_img = cv2.imread(img_path)
-        cv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
-        height, width, _ = cv_img.shape
-        if width < height:
-            cv_img = imutils.resize(cv_img, width=400)
-        else:
-            cv_img = imutils.resize(cv_img, height=400)
-        height, width, _ = cv_img.shape
+        self.seam_image = SeamImage(img_path)
+        height, width, _ = self.seam_image.get_image().shape
         self.width_var.set(width)
         self.height_var.set(height)
-        self.orig_img = cv_img
         self.ghost_image = self.ghost_image.resize((width, height))
         self.draw = ImageDraw.Draw(self.ghost_image)
-        self.image = ImageTk.PhotoImage(Image.fromarray(cv_img))
+        self.image = ImageTk.PhotoImage(Image.fromarray(self.seam_image.get_image()))
         self.canvas.config(width=width, height=height)
         self.canvas.itemconfig(self.image_on_canvas, image=self.image, anchor='nw')
 
     def reset_img(self):
         self.canvas.delete("line")
-        if self.orig_img is not None:
-            self.image = ImageTk.PhotoImage(Image.fromarray(self.orig_img))
+        if self.seam_image is not None:
+            self.seam_image.reset()
+            self.image = ImageTk.PhotoImage(Image.fromarray(self.seam_image.get_image()))
             self.canvas.itemconfig(self.image_on_canvas, image=self.image, anchor='nw')
-            height, width, _ = self.orig_img.shape
+            height, width, _ = self.seam_image.get_image().shape
             self.width_var.set(width)
             self.height_var.set(height)
+            self.ghost_image = self.ghost_image.resize((width, height))
+            self.draw = ImageDraw.Draw(self.ghost_image)
 
     def select_red(self):
         self.color = 'red'
@@ -151,19 +148,27 @@ class SeamCarvingGUI(tk.Frame):
     def resize_image(self):
         target_width = self.width_var.get()
         target_height = self.height_var.get()
-        print('Width: {0} Height: {1}'.format(target_width, target_height))
-        # TODO do something with these and return a cv2 image
-        # self.image = ImageTk.PhotoImage(Image.fromarray(<RESULT HERE>))
-        # self.canvas.itemconfig(self.image_on_canvas, image=self.image, anchor='nw')
+        self.seam_image.resize(height=target_height, width=target_width)
+        self.image = ImageTk.PhotoImage(Image.fromarray(self.seam_image.get_image()))
+        self.canvas.config(width=target_width, height=target_height)
+        self.canvas.itemconfig(self.image_on_canvas, image=self.image, anchor='nw')
+        self.ghost_image = self.ghost_image.resize((target_width, target_height))
+        self.draw = ImageDraw.Draw(self.ghost_image)
 
     def retarget_image(self):
         mask = self.ghost_image
         r, g, b = cv2.split(np.array(mask))
         red_mask = np.where(r, 1, 0)
         green_mask = np.where(g, 1, 0)
-        # TODO do something with these and return a cv2 image
-        # self.image = ImageTk.PhotoImage(Image.fromarray(<RESULT HERE>))
-        # self.canvas.itemconfig(self.image_on_canvas, image=self.image, anchor='nw')
+        # get value of checkbox
+        self.seam_image.remove_mask(mask=red_mask)
+        self.image = ImageTk.PhotoImage(Image.fromarray(self.seam_image.get_image().astype(np.uint8)))
+        height, width = self.seam_image.get_image().shape[0], self.seam_image.get_image().shape[1]
+        self.canvas.config(height=height, width=width)
+        self.canvas.itemconfig(self.image_on_canvas, image=self.image, anchor='nw')
+        self.ghost_image = self.ghost_image.resize((width, height))
+        self.draw = ImageDraw.Draw(self.ghost_image)
+        self.canvas.delete("line")
 
 
 if __name__ == '__main__':

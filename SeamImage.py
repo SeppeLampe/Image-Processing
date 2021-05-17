@@ -21,6 +21,12 @@ class SeamImage:
         self.removed_values = []  # Stores np.arrays containing the values that were removed
         self.removed_order = []  # Will store True/False based on whether a row or col was removed respectively
 
+    def get_image(self):
+        return self.image
+
+    def reset(self):
+        self.image = cv2.cvtColor(cv2.imread(self.location), cv2.COLOR_BGR2RGB)
+
     def remove_rows_and_cols(self, energy_function=sc.e1_colour_numba, rows=0, cols=0):
         """
         Removes rows and/or columns to the image
@@ -90,7 +96,7 @@ class SeamImage:
             self.added_seams.extend(new_seams)
             self.added_order.extend([False for _ in range(cols)])
 
-    def resize(self, energy_function, height, width):
+    def resize(self, energy_function=sc.e1_colour_numba, height=0, width=0):
         """
         Resizes the image to the specified format
         :param energy_function: an energy function to apply for the seam carving
@@ -127,6 +133,11 @@ class SeamImage:
         if keep_shape:
             self.resize(energy_function, original_rows, original_cols)
 
+    def amplify_content(self):
+        # First double the image in size (content-unaware)
+        # Then content-aware resize it back to its original shape
+        pass
+
 
 if __name__ == '__main__':
     my_seam_image = SeamImage(location=".\\Figures\\Castle.jpg")
@@ -136,9 +147,7 @@ if __name__ == '__main__':
     mask = cv2.imread('.\\Figures\\Castle_masked_person.jpg', cv2.IMREAD_GRAYSCALE)
     _, mask = cv2.threshold(mask, 50, 1, cv2.THRESH_BINARY)
     start = time.time()
-    print(my_seam_image.image.shape)
     my_seam_image.remove_mask(mask)
-    print(my_seam_image.image.shape)
     print(f'Time elapsed: {round(time.time() - start, 2)}')
     imshow(my_seam_image.image)
     plt.show()
