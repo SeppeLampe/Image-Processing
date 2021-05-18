@@ -226,6 +226,9 @@ class SeamCarvingGUI(tk.Frame):
         This method adjusts the GUI elements to any resizing change that was done to the displayed image
         :return: Nothing
         """
+        # Remove all drawings
+        self.canvas.delete("line")
+
         # Get the height and weight and we don't care about the number of channels
         height, width, _ = self.seam_image.get_image().shape
 
@@ -240,7 +243,7 @@ class SeamCarvingGUI(tk.Frame):
         self.canvas.itemconfig(self.image_on_canvas, image=self.image, anchor='nw')
 
         # The ghost_image is used to retrieve the mask, it has to be the same size as the image
-        self.ghost_image = self.ghost_image.resize((width, height))
+        self.ghost_image = Image.new("RGB", (width, height), (0, 0, 0))
         self.draw = ImageDraw.Draw(self.ghost_image)
 
     def select_red(self):
