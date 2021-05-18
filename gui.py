@@ -203,6 +203,11 @@ class SeamCarvingGUI(tk.Frame):
         # Prompts the user for file selection via a file dialog
         img_path = filedialog.askopenfilename(initialdir=os.getcwd(), title="Open Image",
                                               filetypes=[("Image Files", "*.png *.jpg *.jpeg")])
+
+        if img_path == '':
+            # Open file operation was cancelled and no file was selected
+            return
+
         self.file_path.set(img_path)
         self.seam_image = SeamImage(img_path)
 
