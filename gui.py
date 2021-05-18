@@ -79,6 +79,9 @@ class SeamCarvingGUI(tk.Frame):
         label = tk.Label(file_frame, anchor='w', textvariable=self.file_path)
         label.pack(side=tk.LEFT)
 
+        reset_button = tk.Button(file_frame, text="Reset", command=self.reset_img)
+        reset_button.pack(side=tk.RIGHT)
+
         # Separator lines are used between sections for better visibility
         separator = ttk.Separator(top_frame, orient='horizontal')
         separator.pack(fill=tk.X)
@@ -105,9 +108,6 @@ class SeamCarvingGUI(tk.Frame):
         execute_resize_button = tk.Button(resize_frame, text="Execute", command=self.resize_image)
         execute_resize_button.pack(side=tk.LEFT)
 
-        reset_resize_button = tk.Button(resize_frame, text="Reset", command=self.reset_img)
-        reset_resize_button.pack(side=tk.LEFT)
-
         # Separator lines are used between sections for better visibility
         separator = ttk.Separator(top_frame, orient='horizontal')
         separator.pack(fill=tk.X)
@@ -131,9 +131,6 @@ class SeamCarvingGUI(tk.Frame):
         execute_obj_remove_button = tk.Button(obj_remove_frame, text="Execute", command=self.remove_object_image)
         execute_obj_remove_button.pack(side=tk.LEFT)
 
-        reset_remove_obj_button = tk.Button(obj_remove_frame, text="Reset", command=self.reset_img)
-        reset_remove_obj_button.pack(side=tk.LEFT)
-
         # Separator lines are used between sections for better visibility
         separator = ttk.Separator(top_frame, orient='horizontal')
         separator.pack(fill=tk.X)
@@ -153,9 +150,6 @@ class SeamCarvingGUI(tk.Frame):
 
         execute_amplify_button = tk.Button(content_ampl_frame, text="Execute", command=self.amplify_content)
         execute_amplify_button.pack(side=tk.LEFT)
-
-        reset_amplify_button = tk.Button(content_ampl_frame, text="Reset", command=self.reset_img)
-        reset_amplify_button.pack(side=tk.LEFT)
 
         # Separator lines are used between sections for better visibility
         separator = ttk.Separator(top_frame, orient='horizontal')
