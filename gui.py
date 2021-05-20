@@ -119,10 +119,10 @@ class SeamCarvingGUI(tk.Frame):
         label = tk.Label(obj_remove_frame, text='Remove object', width=15, anchor='w', font='Helvetica 14 bold')
         label.pack(side=tk.LEFT)
 
-        red_button = tk.Button(obj_remove_frame, text="RED", fg="red", command=self.select_red)
+        red_button = tk.Button(obj_remove_frame, text="REMOVE", fg="red", command=self.select_red)
         red_button.pack(side=tk.LEFT)
 
-        green_button = tk.Button(obj_remove_frame, text="GREEN", fg="green", command=self.select_green)
+        green_button = tk.Button(obj_remove_frame, text="KEEP", fg="green", command=self.select_green)
         green_button.pack(side=tk.LEFT)
 
         keep_shape_checkbox = tk.Checkbutton(obj_remove_frame, text="Keep shape?", variable=self.keep_shape_var)
