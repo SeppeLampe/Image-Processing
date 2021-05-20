@@ -325,7 +325,7 @@ class SeamCarvingGUI(tk.Frame):
         green_mask = np.where(g, 1, 0)
 
         keep_shape = True if self.keep_shape_var.get() else False
-        self.seam_image.remove_mask(mask=red_mask, keep_shape=keep_shape)
+        self.seam_image.remove_mask(remove_mask=red_mask, keep_mask=green_mask, keep_shape=keep_shape)
 
         # Remove all drawings
         self.canvas.delete("line")

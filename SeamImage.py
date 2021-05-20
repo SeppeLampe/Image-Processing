@@ -120,7 +120,7 @@ class SeamImage:
             self.remove_rows_and_cols(energy_function=energy_function, rows=0, cols=cols)
             self.add_rows_and_cols(energy_function=energy_function, rows=-rows, cols=0)
 
-    def remove_mask(self, mask, energy_function=sc.e1_colour_numba, keep_shape=False):
+    def remove_mask(self, remove_mask, keep_mask, energy_function=sc.e1_colour_numba, keep_shape=False):
         """
         Removes a mask from an image
         :param mask: a binary 2D array where the area to be removed is 1, the rest 0
@@ -129,7 +129,7 @@ class SeamImage:
         :return: Nothing
         """
         original_rows, original_cols = self.image.shape[0], self.image.shape[1]
-        self.image = sc.remove_mask(self.image, energy_function=energy_function, mask=mask)
+        self.image = sc.remove_mask(self.image, energy_function=energy_function, remove_mask=remove_mask, keep_mask=keep_mask)
         if keep_shape:
             self.resize(energy_function, original_rows, original_cols)
 
@@ -140,11 +140,11 @@ class SeamImage:
         :param amp_factor: amplification factor for the image
         :return: Nothing
         """
+        rows, cols = self.image.shape[0], self.image.shape[1]
         # Simply scale the image first
-        self.image = cv2.resize(self.image, (int(self.image.shape[1]*amp_factor), int(self.image.shape[0]*amp_factor)))
-        
+        self.image = cv2.resize(self.image, (int(cols*amp_factor), int(rows*amp_factor)))
         # Rescale it back to original size with seam carving
-        self.remove_rows_and_cols(rows=int(self.image.shape[0] - self.original_shape[0]), cols=int(self.image.shape[1] - self.original_shape[1]))
+        self.resize(height=rows, width=cols)
 
 
 if __name__ == '__main__':

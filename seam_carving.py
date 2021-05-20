@@ -386,22 +386,26 @@ def remove_row_seam_numba(image, seam):
     return new_image.astype(np.int16), values
 
 
-def remove_mask(image, energy_function, mask):
-    mask = mask.astype(np.int16)
+def remove_mask(image, energy_function, remove_mask, keep_mask):
+    remove_mask = remove_mask.astype(np.int16)
+    keep_mask = keep_mask.astype(np.int16)
     # Find the row and column indices which contain at least one pixel to be removed
-    mask_rows, mask_cols = np.where(mask.any(axis=1))[0], np.where(mask.any(axis=0))[0]
-    mask_height = np.max(mask_rows) - np.min(mask_rows)
-    mask_width = np.max(mask_cols) - np.min(mask_cols)
-    if mask_height >= mask_width:
+    remove_mask_rows, remove_mask_cols = np.where(remove_mask.any(axis=1))[0], np.where(remove_mask.any(axis=0))[0]
+    remove_mask_height = np.max(remove_mask_rows) - np.min(remove_mask_rows)
+    remove_mask_width = np.max(remove_mask_cols) - np.min(remove_mask_cols)
+    if remove_mask_height >= remove_mask_width:
         seam_find_function = find_vertical_seams
         seam_remove_function = remove_column_seam_numba
     else:
         seam_find_function = find_horizontal_seams
         seam_remove_function = remove_row_seam_numba
-    mask *= -10000  # Assign a value of -10000 to each pixel in the mask
-    mask_3d = np.zeros((mask.shape[0], mask.shape[1], 3))
+    # Assign a high negative value to each pixel in the remove mask and high positive value to those in the keep mask
+    remove_mask *= -100 * np.max((remove_mask.shape[0], remove_mask.shape[1]))
+    keep_mask *= 100 * np.max((remove_mask.shape[0], remove_mask.shape[1]))
+    mask = remove_mask + keep_mask
+    mask_3d = np.zeros((remove_mask.shape[0], remove_mask.shape[1], 3))
     mask_3d[:, :, 0], mask_3d[:, :, 1], mask_3d[:, :, 2] = mask, mask, mask
-    while np.any(mask_3d):
+    while np.min(mask_3d) < 0:
         e_matrix = energy_function(image)
         # By adding mask3d, the seams will preferentially include pixels in the mask since they have a value of -10000
         e_matrix += mask_3d[:, :, 0]
@@ -609,19 +613,19 @@ if __name__ == '__main__':
 
     im = cv2.cvtColor(cv2.imread(".\\Figures\\Castle.jpg"), cv2.COLOR_BGR2RGB)
     im_gray = cv2.cvtColor(im, cv2.COLOR_RGB2GRAY)
-
+    """
     start = time.time()
     im2, seam2 = add_rows(im, e1_colour_numba, 100)
     print(f'Time elapsed: {round(time.time() - start, 2)}')
     imshow(im2)
     plt.show()
-
+    
     start = time.time()
     im2, seam2 = add_rows(im, hog_colour_numba, 100)
     print(f'Time elapsed: {round(time.time() - start, 2)}')
     imshow(im2)
     plt.show()
-
+    """
     e1 = e1_colour_numba(im)
 
     vertical_seam = find_vertical_seams(e1)[0][0]
