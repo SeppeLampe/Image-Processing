@@ -59,7 +59,7 @@ class SeamImage:
             self.removed_seams.extend(new_seams)
             self.removed_order.extend(new_orders)
 
-    def add_rows_and_cols(self, energy_function=sc.e1_colour, rows=0, cols=0):
+    def add_rows_and_cols(self, energy_function=sc.e1_colour_numba, rows=0, cols=0):
         """
         Adds rows and/or columns to the image
         :param energy_function: an energy function to apply for the seam carving
@@ -133,10 +133,11 @@ class SeamImage:
         if keep_shape:
             self.resize(energy_function, original_rows, original_cols)
 
-    def amplify_content(self, amp_factor=1.2):
+    def amplify_content(self, energy_function=sc.e1_colour_numba, amp_factor=1.2):
         """
         First scales the image in size (content-unaware) given by amp_factor
         Then content-aware resize it back to its original shape
+        :param energy_function: an energy function to apply for the seam carving
         :param amp_factor: amplification factor for the image
         :return: Nothing
         """
@@ -144,7 +145,7 @@ class SeamImage:
         # Simply scale the image first
         self.image = cv2.resize(self.image, (int(cols*amp_factor), int(rows*amp_factor)))
         # Rescale it back to original size with seam carving
-        self.resize(height=rows, width=cols)
+        self.resize(height=rows, width=cols, energy_function=energy_function)
 
 
 if __name__ == '__main__':
