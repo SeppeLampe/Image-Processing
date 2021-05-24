@@ -348,7 +348,7 @@ class SeamCarvingGUI(tk.Frame):
                 return
 
             # Call the seam carving function
-            self.seam_image.amplify_content(target_factor)
+            self.seam_image.amplify_content(amp_factor=target_factor)
             # Update display
             self.post_process()
         except tk.TclError:
