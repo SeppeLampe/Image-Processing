@@ -26,7 +26,7 @@ class SeamImage:
     def reset(self):
         self.image = cv2.cvtColor(cv2.imread(self.location), cv2.COLOR_BGR2RGB)
 
-    def remove_rows_and_cols(self, energy_function=sc.e1_colour_numba, rows=0, cols=0):
+    def remove_rows_and_cols(self, energy_function=sc.e1_colour_numba, rows=0, cols=0, gradient_domain=0):
         """
         Removes rows and/or columns to the image
         :param energy_function: an energy function to apply for the seam carving
@@ -54,7 +54,7 @@ class SeamImage:
 
         # Remove the amount of rows and columns from the image that remain to be removed
         if rows > 0 or cols > 0:
-            self.image, new_values, new_seams, new_orders = sc.remove_rows_and_cols(self.image, energy_function, rows, cols)
+            self.image, new_values, new_seams, new_orders = sc.remove_rows_and_cols(self.image, energy_function, rows, cols, gradient_domain)
             self.removed_values.extend(new_values)
             self.removed_seams.extend(new_seams)
             self.removed_order.extend(new_orders)
@@ -95,7 +95,7 @@ class SeamImage:
             self.added_seams.extend(new_seams)
             self.added_order.extend([False for _ in range(cols)])
 
-    def resize(self, energy_function=sc.e1_colour_numba, height=0, width=0):
+    def resize(self, energy_function=sc.e1_colour_numba, height=0, width=0, gradient_domain=0):
         """
         Resizes the image to the specified format
         :param energy_function: an energy function to apply for the seam carving
@@ -109,14 +109,14 @@ class SeamImage:
             self.add_rows_and_cols(energy_function=energy_function, rows=rows, cols=cols)
         # Remove rows and columns
         elif rows <= 0 and cols <= 0:
-            self.remove_rows_and_cols(energy_function=energy_function, rows=-rows, cols=-cols)
+            self.remove_rows_and_cols(energy_function=energy_function, rows=-rows, cols=-cols, gradient_domain=gradient_domain)
         # Add rows, remove columns
         elif rows >= 0 >= cols:
-            self.remove_rows_and_cols(energy_function=energy_function, rows=rows, cols=0)
+            self.remove_rows_and_cols(energy_function=energy_function, rows=rows, cols=0, gradient_domain=gradient_domain)
             self.add_rows_and_cols(energy_function=energy_function, rows=0, cols=-cols)
         # Remove rows, add columns
         else:
-            self.remove_rows_and_cols(energy_function=energy_function, rows=0, cols=cols)
+            self.remove_rows_and_cols(energy_function=energy_function, rows=0, cols=cols, gradient_domain=gradient_domain)
             self.add_rows_and_cols(energy_function=energy_function, rows=-rows, cols=0)
 
     def remove_mask(self, mask_to_remove, mask_to_keep, energy_function=sc.e1_colour_numba, keep_shape=False):
@@ -133,7 +133,7 @@ class SeamImage:
         if keep_shape:
             self.resize(energy_function, original_rows, original_cols)
 
-    def amplify_content(self, energy_function=sc.e1_colour_numba, amp_factor=1.2):
+    def amplify_content(self, energy_function=sc.e1_colour_numba, amp_factor=1.2, gradient_domain=0):
         """
         First scales the image in size (content-unaware) given by amp_factor
         Then content-aware resize it back to its original shape
@@ -145,7 +145,7 @@ class SeamImage:
         # Simply scale the image first
         self.image = cv2.resize(self.image, (int(cols*amp_factor), int(rows*amp_factor)))
         # Rescale it back to original size with seam carving
-        self.resize(height=rows, width=cols, energy_function=energy_function)
+        self.resize(height=rows, width=cols, energy_function=energy_function, gradient_domain=gradient_domain)
 
 
 if __name__ == '__main__':

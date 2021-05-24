@@ -8,6 +8,7 @@ from numba import njit, types
 from numba.extending import overload
 from scipy.ndimage import generic_filter
 from skimage.io import imshow
+from poisson_solver import poisson_solver
 
 
 # This allows numba to build a numpy array from another numpy array
@@ -414,9 +415,32 @@ def remove_mask(image, energy_function, mask_to_remove, mask_to_keep):
         mask_3d = seam_remove_function(mask_3d, seam)[0]
     return image
 
+def process_gradient_domain(function, image, new_seam):
+    """
+    :param function: function to perform operation on, can be remove_row_seam_numba or remove_column_seam_numba
+    :param image: RGB image as 3D numpy array
+    :param seam: The seam containing the ROW/COLUMN indices that should be removed, should be a 1D numpy array
+    :return:    (0) the reduced image
+                (1) the values of the pixels that were reduced
+    """
+    # Compute derivatives before seam is removed
+    gx, gy = forward_derivative_color(image.astype(np.float32))
+    
+    image, new_values = function(image, new_seam)
+    
+    # Remove seam from derivatives
+    gx, _ = function(gx, new_seam)
+    gy, _ = function(gy, new_seam)
+               
+    # Reconstruct original image for all color channels
+    image[:,:,0] = poisson_solver(gx[:,:,0], gy[:,:,0], image.astype(np.float32)[:,:,0])
+    image[:,:,1] = poisson_solver(gx[:,:,1], gy[:,:,1], image.astype(np.float32)[:,:,1])
+    image[:,:,2] = poisson_solver(gx[:,:,2], gy[:,:,2], image.astype(np.float32)[:,:,2])
+    
+    return image, new_values
 
 # Passing functions to numba compilated code is quite hard and complicated, so we won't numba compile this function
-def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remove=0):
+def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remove=0, gradient_domain=0):
     """
     :param image: RGB image as 3D numpy array
     :param energy_function: An energy function (e1_colour_numba, entropy_colour_numba or hog_colour_numba) to apply
@@ -432,18 +456,29 @@ def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remov
     seam = []
     values = []
     order = []  # True = row, False = column
+
     while rows_to_remove > 0 and cols_to_remove > 0:
         energy_matrix = energy_function(image)
         column_seam = find_vertical_seams(energy_matrix)
         row_seam = find_horizontal_seams(energy_matrix)
         if row_seam[1] <= column_seam[1]:
             new_seam = row_seam[0][0]
-            image, new_values = remove_row_seam_numba(image, new_seam)
+
+            if not gradient_domain:
+                image, new_values = remove_row_seam_numba(image, new_seam)
+            else:
+                image, new_values = process_gradient_domain(remove_row_seam_numba, image, new_seam)
+                
             order.append(True)
             rows_to_remove -= 1
         else:
             new_seam = column_seam[0][0]
-            image, new_values = remove_column_seam_numba(image, new_seam)
+
+            if not gradient_domain:
+                image, new_values = remove_column_seam_numba(image, new_seam)
+            else:
+                image, new_values = process_gradient_domain(remove_column_seam_numba, image, new_seam)
+                
             order.append(False)
             cols_to_remove -= 1
         seam.append(new_seam)
@@ -452,7 +487,12 @@ def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remov
     while rows_to_remove > 0:  # The columns have already been removed
         energy_matrix = energy_function(image)
         new_seam = find_horizontal_seams(energy_matrix)[0][0]
-        image, new_values = remove_row_seam_numba(image, new_seam)
+
+        if not gradient_domain:
+            image, new_values = remove_row_seam_numba(image, new_seam)
+        else:
+            image, new_values = process_gradient_domain(remove_row_seam_numba, image, new_seam)
+            
         order.append(True)
         seam.append(new_seam)
         values.append(new_values)
@@ -461,7 +501,12 @@ def remove_rows_and_cols(image, energy_function, rows_to_remove=0, cols_to_remov
     while cols_to_remove > 0:  # The rows have already been removed
         energy_matrix = energy_function(image)
         new_seam = find_vertical_seams(energy_matrix)[0][0]
-        image, new_values = remove_column_seam_numba(image, new_seam)
+
+        if not gradient_domain:
+            image, new_values = remove_column_seam_numba(image, new_seam)
+        else:
+            image, new_values = process_gradient_domain(remove_column_seam_numba, image, new_seam)
+            
         order.append(False)
         seam.append(new_seam)
         values.append(new_values)
@@ -605,6 +650,40 @@ def reconstruct_row_seam_numba(image, values, seam):
                                                                                          1].T, new_image_T[:, :, 2].T
     return new_image
 
+def forward_derivative_gray(image):
+    """
+    :param image: a grayscale image as 2D numpy array
+    :return:    (0) 2D numpy array, forward derivative for x
+                (1) 2D numpy array, forward derivative for y
+    """
+    rows, cols = image.shape
+    resultx = np.zeros((rows, cols))
+    resulty = np.zeros((rows, cols))
+
+    for row_idx in range(rows-1):
+        for col_idx in range(cols-1):
+            resultx[row_idx, col_idx] = float(image[row_idx, col_idx+1]) - float(image[row_idx, col_idx])
+            resulty[row_idx, col_idx] = float(image[row_idx+1, col_idx]) - float(image[row_idx, col_idx])
+            
+    return resultx, resulty
+
+def forward_derivative_color(image):
+    """
+    :param image: a colour image as 2D numpy array
+    :return:    (0) 2D numpy array, forward derivative for x
+                (1) 2D numpy array, forward derivative for y
+    """
+    rows, cols,ch = image.shape
+    resultx = np.zeros((rows, cols, ch))
+    resulty = np.zeros((rows, cols, ch))
+
+    image = np.asarray(image, dtype='float')
+    for row_idx in range(rows-1):
+        for col_idx in range(cols-1):
+            resultx[row_idx, col_idx, :] = image[row_idx, col_idx+1, :] - image[row_idx, col_idx, :]
+            resulty[row_idx, col_idx, :] = image[row_idx+1, col_idx, :] - image[row_idx, col_idx, :]
+            
+    return resultx, resulty
 
 if __name__ == '__main__':
     """

@@ -44,6 +44,8 @@ class SeamCarvingGUI(tk.Frame):
         self.width_var = tk.IntVar()
         self.height_var = tk.IntVar()
         self.keep_shape_var = tk.IntVar()
+        self.gradient_domain_resize_var = tk.IntVar()
+        self.gradient_domain_amp_var = tk.IntVar()
         self.factor_var = tk.DoubleVar(value=1.2)
         self.output_img_name = tk.StringVar(value='result')
 
@@ -105,6 +107,9 @@ class SeamCarvingGUI(tk.Frame):
         height_entry = tk.Entry(resize_frame, textvariable=self.height_var)
         height_entry.pack(side=tk.LEFT)
 
+        gradient_domain_resize_checkbox = tk.Checkbutton(resize_frame, text="Gradient domain?", variable=self.gradient_domain_resize_var)
+        gradient_domain_resize_checkbox.pack(side=tk.LEFT)
+
         execute_resize_button = tk.Button(resize_frame, text="Execute", command=self.resize_image)
         execute_resize_button.pack(side=tk.LEFT)
 
@@ -147,6 +152,9 @@ class SeamCarvingGUI(tk.Frame):
 
         factor_entry = tk.Entry(content_ampl_frame, textvariable=self.factor_var)
         factor_entry.pack(side=tk.LEFT)
+
+        gradient_domain_amplify_checkbox = tk.Checkbutton(content_ampl_frame, text="Gradient domain?", variable=self.gradient_domain_amp_var)
+        gradient_domain_amplify_checkbox.pack(side=tk.LEFT)
 
         execute_amplify_button = tk.Button(content_ampl_frame, text="Execute", command=self.amplify_content)
         execute_amplify_button.pack(side=tk.LEFT)
@@ -304,8 +312,10 @@ class SeamCarvingGUI(tk.Frame):
                 messagebox.showerror("Error!", "Please input a positive width value!")
                 return
 
+            gradient_domain_resize_var = 1 if self.gradient_domain_resize_var.get() else 0
+
             # Call the seam carving function
-            self.seam_image.resize(height=target_height, width=target_width)
+            self.seam_image.resize(height=target_height, width=target_width, gradient_domain=gradient_domain_resize_var)
             # Update display
             self.post_process()
         except tk.TclError:
@@ -347,8 +357,10 @@ class SeamCarvingGUI(tk.Frame):
                 messagebox.showerror("Error!", "Please input a value greater than 1!")
                 return
 
+            gradient_domain_amp_var = 1 if self.gradient_domain_amp_var.get() else 0
+
             # Call the seam carving function
-            self.seam_image.amplify_content(amp_factor=target_factor)
+            self.seam_image.amplify_content(amp_factor=target_factor, gradient_domain=gradient_domain_amp_var)
             # Update display
             self.post_process()
         except tk.TclError:
