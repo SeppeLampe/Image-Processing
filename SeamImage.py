@@ -12,7 +12,6 @@ class SeamImage:
             self.image = cv2.cvtColor(cv2.imread(location), cv2.COLOR_BGR2RGB)
         else:
             self.image = cv2.imread(location, cv2.IMREAD_GRAYSCALE)
-        self.original_shape = self.image.shape
 
         self.added_seams = []  # Stores np.arrays containing the row/col indices that were added
         self.added_order = []  # Will store True/False based on whether a row or col was added respectively
@@ -120,16 +119,17 @@ class SeamImage:
             self.remove_rows_and_cols(energy_function=energy_function, rows=0, cols=cols)
             self.add_rows_and_cols(energy_function=energy_function, rows=-rows, cols=0)
 
-    def remove_mask(self, remove_mask, keep_mask, energy_function=sc.e1_colour_numba, keep_shape=False):
+    def remove_mask(self, mask_to_remove, mask_to_keep, energy_function=sc.e1_colour_numba, keep_shape=False):
         """
         Removes a mask from an image
-        :param mask: a binary 2D array where the area to be removed is 1, the rest 0
+        :param mask_to_remove: a binary 2D array where the area to be removed is 1, the rest 0
+        :param mask_to_keep: a binary 2D array where the area to be definitely kept is 1, the rest 0
         :param energy_function: an energy function to apply for the seam carving
         :param keep_shape: Boolean to indicate whether the original shape should be kept
         :return: Nothing
         """
         original_rows, original_cols = self.image.shape[0], self.image.shape[1]
-        self.image = sc.remove_mask(self.image, energy_function=energy_function, remove_mask=remove_mask, keep_mask=keep_mask)
+        self.image = sc.remove_mask(self.image, energy_function=energy_function, mask_to_remove=mask_to_remove, mask_to_keep=mask_to_keep)
         if keep_shape:
             self.resize(energy_function, original_rows, original_cols)
 

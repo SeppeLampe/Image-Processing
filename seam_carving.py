@@ -279,12 +279,13 @@ def find_vertical_seams(e_matrix, amount=1):
     :return:    (0) 2D numpy array, each ROW contains the COLUMN indices of a vertical seam path
                 (1) the total energy of the minimal energy path of the last seam
     """
+    e_matrix = e_matrix.astype(np.float32)
     rows, cols = e_matrix.shape
     seams = np.zeros((amount, rows))
     for num in range(amount):
         # path_e will store the energy of the minimum energy path available for each pixel,
         # path will store the column index of the pixel above it with the minimal energy path
-        path_e, path = np.zeros((rows, cols)), np.zeros((rows, cols))
+        path_e, path = np.zeros((rows, cols), dtype=np.float32), np.zeros((rows, cols))
         path_e[0] = e_matrix[0]
         # Find the minimum energy path (top to bottom) for each pixel
         for row_idx in range(1, rows):
@@ -365,7 +366,7 @@ def remove_column_seam_numba(image, seam):
         values[row_idx] = image[row_idx, col_idx]
         new_image[row_idx, :col_idx] = image[row_idx, :col_idx]
         new_image[row_idx, col_idx:] = image[row_idx, col_idx + 1:]
-    return new_image.astype(np.int16), values
+    return new_image.astype(np.float32), values
 
 
 @njit
@@ -383,14 +384,14 @@ def remove_row_seam_numba(image, seam):
     new_image_T, values = remove_column_seam_numba(image_T, seam)
     new_image[:, :, 0], new_image[:, :, 1], new_image[:, :, 2] = new_image_T[:, :, 0].T, new_image_T[:, :,
                                                                                          1].T, new_image_T[:, :, 2].T
-    return new_image.astype(np.int16), values
+    return new_image.astype(np.float32), values
 
 
-def remove_mask(image, energy_function, remove_mask, keep_mask):
-    remove_mask = remove_mask.astype(np.int16)
-    keep_mask = keep_mask.astype(np.int16)
+def remove_mask(image, energy_function, mask_to_remove, mask_to_keep):
+    mask_to_remove = mask_to_remove.astype(np.int32)
+    mask_to_keep = mask_to_keep.astype(np.int32)
     # Find the row and column indices which contain at least one pixel to be removed
-    remove_mask_rows, remove_mask_cols = np.where(remove_mask.any(axis=1))[0], np.where(remove_mask.any(axis=0))[0]
+    remove_mask_rows, remove_mask_cols = np.where(mask_to_remove.any(axis=1))[0], np.where(mask_to_remove.any(axis=0))[0]
     remove_mask_height = np.max(remove_mask_rows) - np.min(remove_mask_rows)
     remove_mask_width = np.max(remove_mask_cols) - np.min(remove_mask_cols)
     if remove_mask_height >= remove_mask_width:
@@ -400,14 +401,13 @@ def remove_mask(image, energy_function, remove_mask, keep_mask):
         seam_find_function = find_horizontal_seams
         seam_remove_function = remove_row_seam_numba
     # Assign a high negative value to each pixel in the remove mask and high positive value to those in the keep mask
-    remove_mask *= -100 * np.max((remove_mask.shape[0], remove_mask.shape[1]))
-    keep_mask *= 100 * np.max((remove_mask.shape[0], remove_mask.shape[1]))
-    mask = remove_mask + keep_mask
-    mask_3d = np.zeros((remove_mask.shape[0], remove_mask.shape[1], 3))
-    mask_3d[:, :, 0], mask_3d[:, :, 1], mask_3d[:, :, 2] = mask, mask, mask
+    mask = np.where(mask_to_remove, -100*mask_to_remove*np.max((mask_to_remove.shape[0], mask_to_remove.shape[1])), 0)
+    mask += 100*mask_to_keep*np.max((mask_to_remove.shape[0], mask_to_remove.shape[1]))
+    mask_3d = np.repeat(mask[:, :, np.newaxis], 3, axis=2)
     while np.min(mask_3d) < 0:
         e_matrix = energy_function(image)
-        # By adding mask3d, the seams will preferentially include pixels in the mask since they have a value of -10000
+        # By adding mask3d, the seams will preferentially include pixels in the mask to be removed (negative values)
+        # and exclude pixels in the mask to be kept (high positive values)
         e_matrix += mask_3d[:, :, 0]
         seam = seam_find_function(e_matrix)[0][0]
         image = seam_remove_function(image, seam)[0]
