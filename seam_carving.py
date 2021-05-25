@@ -424,7 +424,7 @@ def process_gradient_domain(function, image, new_seam):
                 (1) the values of the pixels that were reduced
     """
     # Compute derivatives before seam is removed
-    gx, gy = forward_derivative_color(image.astype(np.float32))
+    gx, gy = forward_derivative(image.astype(np.float32))
     
     image, new_values = function(image, new_seam)
     
@@ -650,39 +650,20 @@ def reconstruct_row_seam_numba(image, values, seam):
                                                                                          1].T, new_image_T[:, :, 2].T
     return new_image
 
-def forward_derivative_gray(image):
+@njit
+def forward_derivative(image):
     """
-    :param image: a grayscale image as 2D numpy array
+    :param image: a colour/grayscale image as 2D numpy array as float32
     :return:    (0) 2D numpy array, forward derivative for x
                 (1) 2D numpy array, forward derivative for y
     """
-    rows, cols = image.shape
-    resultx = np.zeros((rows, cols))
-    resulty = np.zeros((rows, cols))
 
-    for row_idx in range(rows-1):
-        for col_idx in range(cols-1):
-            resultx[row_idx, col_idx] = float(image[row_idx, col_idx+1]) - float(image[row_idx, col_idx])
-            resulty[row_idx, col_idx] = float(image[row_idx+1, col_idx]) - float(image[row_idx, col_idx])
-            
-    return resultx, resulty
-
-def forward_derivative_color(image):
-    """
-    :param image: a colour image as 2D numpy array
-    :return:    (0) 2D numpy array, forward derivative for x
-                (1) 2D numpy array, forward derivative for y
-    """
-    rows, cols,ch = image.shape
-    resultx = np.zeros((rows, cols, ch))
-    resulty = np.zeros((rows, cols, ch))
-
-    image = np.asarray(image, dtype='float')
-    for row_idx in range(rows-1):
-        for col_idx in range(cols-1):
-            resultx[row_idx, col_idx, :] = image[row_idx, col_idx+1, :] - image[row_idx, col_idx, :]
-            resulty[row_idx, col_idx, :] = image[row_idx+1, col_idx, :] - image[row_idx, col_idx, :]
-            
+    resultx = np.zeros(image.shape)
+    resulty = np.zeros(image.shape)
+          
+    resultx[:-1,:-1] = image[:-1,1:] - image[:-1,:-1]
+    resulty[:-1,:-1] = image[1:,:-1] - image[:-1,:-1]
+    
     return resultx, resulty
 
 if __name__ == '__main__':
