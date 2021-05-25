@@ -25,11 +25,17 @@ Modified by Akshaya Ganesh Nakshathri
 
 import math
 import numpy as np
-import scipy
+from numba import njit
 
+@njit
 def poisson_solver(gx, gy, boundary_image):
-    # Inputs; gx and gy -> Gradients
-    # boundary_image -> Boundary image intensities
+    """
+    :param gx: Gradient in x direction
+    :param gy: Gradient in y direction
+    :param boundary_image: Boundary image intensities
+    :return:    (0) reconstructed image using Poisson solver
+    """
+
     # gx, gy and boundary image should be of same size
     # This is derived from Dr. Raskar's matlab code here: http://web.media.mit.edu/~raskar/photo/code.pdf
 
@@ -55,7 +61,15 @@ def poisson_solver(gx, gy, boundary_image):
     fsin = my_dst(tt.T).T
 
     # compute Eigenvalues
-    (x,y) = np.meshgrid(range(1,f.shape[1]+1), range(1,f.shape[0]+1), copy=True)
+    x = np.zeros(f.shape)
+    y = np.zeros(f.shape)
+    
+    for i in range(0, f.shape[0]):
+        x[i,:] = np.arange(1,f.shape[1]+1)
+        
+    for i in range(0, f.shape[1]):
+        y[:,i] = np.arange(1,f.shape[0]+1)
+    
     denom = (2*np.cos(math.pi*x/(f.shape[1]+1))-2) + (2*np.cos(math.pi*y/(f.shape[0]+1)) - 2)
 
     f = fsin/denom
@@ -73,7 +87,12 @@ def poisson_solver(gx, gy, boundary_image):
     
     return result
 
+@njit
 def my_dst(x):
+    """
+    :param x: input matrix as 2D numpy array
+    :return:    (0) Discrete Sine Transform of input as 2D numpy array
+    """
     # Perform DST similar to matlab https://nl.mathworks.com/help/pde/ug/dst.html
     # For 2D matrix, perform DST column wise
     N = x.shape[0]
@@ -87,13 +106,15 @@ def my_dst(x):
             sin_array = np.sin(math.pi*(k+1)*n/(N+1));
             out[k, i] = np.sum(x[:,i]*sin_array)
 
-    #for i in range(0, x.shape[1]):
-    #    out2[:, i] = scipy.fftpack.dst(x[:,i])
-        
     return out
 
-
+@njit
 def my_idst(x):
+    """
+    :param x: input matrix as 2D numpy array
+    :return:    (0) Inverse Discrete Sine Transform of input as 2D numpy array
+    """
+    
     # Perform IDST similar to matlab https://nl.mathworks.com/help/pde/ug/dst.html
     # For 2D matrix, perform IDST column wise
 
@@ -109,8 +130,5 @@ def my_idst(x):
             out[k, i] = np.sum(x[:,i]*sin_array)
 
     out = out * 2/(N+1)
-    
-    #for i in range(0, x.shape[1]):
-    #    out2[:, i] = scipy.fftpack.idst(x[:,i])
-        
+
     return out
