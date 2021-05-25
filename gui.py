@@ -35,6 +35,7 @@ class SeamCarvingGUI(tk.Frame):
 
         # For displaying images
         self.seam_image = None
+        self.cap = None
         # The ghost_image is not visible and it is used to retrieve the mask for eventual object removal functionality
         self.ghost_image = Image.new("RGB", (DEFAULT_SIZE, DEFAULT_SIZE), (0, 0, 0))
         self.draw = ImageDraw.Draw(self.ghost_image)
@@ -204,14 +205,36 @@ class SeamCarvingGUI(tk.Frame):
 
         # Prompts the user for file selection via a file dialog
         img_path = filedialog.askopenfilename(initialdir=os.getcwd(), title="Open Image",
-                                              filetypes=[("Image Files", "*.png *.jpg *.jpeg")])
+                                              filetypes=[("Image Files", "*.png *.jpg *.jpeg *.avi *.mpg *.mp4")])
 
         if img_path == '':
             # Open file operation was cancelled and no file was selected
             return
 
         self.file_path.set(img_path)
-        self.seam_image = SeamImage(img_path)
+        
+        if img_path.lower().endswith('.avi') or img_path.lower().endswith('.mpg') or img_path.lower().endswith('.mp4'):
+            # Open video file, read first frame and initialize SeamImage
+            self.cap = cv2.VideoCapture(img_path)
+            
+            self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+
+            
+            # Read first frame
+            ret, frame = self.cap.read()
+            
+            if not ret:
+                print("Couldn't open video. Exiting now")
+                return
+            
+            self.seam_image = SeamImage(None, color=True, image=frame)
+            
+            # Create a temp output video
+            self.temp_output_file_name = img_path[:-4] + '_temp.mp4'
+            self.fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
+            
+        else:
+            self.seam_image = SeamImage(img_path)
 
         # Adjust GUI to selected image
         self.post_process()
@@ -225,9 +248,19 @@ class SeamCarvingGUI(tk.Frame):
         self.canvas.delete("line")
 
         if self.seam_image is not None:
-            self.seam_image.reset()
-            # Update display
-            self.post_process()
+            if self.cap is None:
+                self.seam_image.reset()
+                # Update display
+                self.post_process()
+            else:
+                # Go to first frame
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0);
+                # Read first frame
+                ret, frame = self.cap.read()
+                # Initialize SeamImage
+                self.seam_image = SeamImage(None, color=True, image=frame)
+                # Update display
+                self.post_process()
 
     def post_process(self):
         """
@@ -314,8 +347,37 @@ class SeamCarvingGUI(tk.Frame):
 
             gradient_domain_resize_var = 1 if self.gradient_domain_resize_var.get() else 0
 
-            # Call the seam carving function
-            self.seam_image.resize(height=target_height, width=target_width, gradient_domain=gradient_domain_resize_var)
+            # If it is a video, process all frames
+            out = None
+            if self.cap is not None:
+                while True:
+                    # Call the seam carving function on current frame
+                    self.seam_image.resize(height=target_height, width=target_width)
+                                      
+                    # Store current frame output
+                    if out is None:
+                        out_video_size = (self.seam_image.image.shape[1], self.seam_image.image.shape[0])
+                        out = cv2.VideoWriter(self.temp_output_file_name, self.fourcc, self.fps, out_video_size)
+                    
+                    image = self.seam_image.get_image().astype(np.uint8)
+                    # The returned image is in BGR
+                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                    
+                    out.write(image)
+                    
+                    # Read next frame
+                    ret, frame = self.cap.read()
+                    
+                    if not ret:
+                        print("End of file. Exiting ...")
+                        break                   
+                    
+                    # Initialize seam_image to next frame
+                    self.seam_image = SeamImage(None, color=True, image=frame)
+            else:
+                # Call the seam carving function
+                self.seam_image.resize(height=target_height, width=target_width, gradient_domain=gradient_domain_resize_var)
+                
             # Update display
             self.post_process()
         except tk.TclError:
@@ -335,7 +397,36 @@ class SeamCarvingGUI(tk.Frame):
         green_mask = np.where(g, 1, 0)
 
         keep_shape = True if self.keep_shape_var.get() else False
-        self.seam_image.remove_mask(mask_to_remove=red_mask, mask_to_keep=green_mask, keep_shape=keep_shape)
+        
+        if self.cap is not None:
+            # Process all frames of a video
+            out = None
+            while True:
+                # Call the seam carving function on current frame
+                self.seam_image.remove_mask(mask_to_remove=red_mask, mask_to_keep=green_mask, keep_shape=keep_shape)
+                                  
+                # Store current frame output
+                if out is None:
+                    out_video_size = (self.seam_image.image.shape[1], self.seam_image.image.shape[0])
+                    out = cv2.VideoWriter(self.temp_output_file_name, self.fourcc, self.fps, out_video_size)
+                
+                image = self.seam_image.get_image().astype(np.uint8)
+                # The returned image is in BGR
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                
+                out.write(image)
+                
+                # Read next frame
+                ret, frame = self.cap.read()
+                
+                if not ret:
+                    print("End of file. Exiting ...")
+                    break                   
+                
+                # Initialize seam_image to next frame
+                self.seam_image = SeamImage(None, color=True, image=frame)
+        else:
+            self.seam_image.remove_mask(mask_to_remove=red_mask, mask_to_keep=green_mask, keep_shape=keep_shape)
 
         # Remove all drawings
         self.canvas.delete("line")
@@ -359,8 +450,37 @@ class SeamCarvingGUI(tk.Frame):
 
             gradient_domain_amp_var = 1 if self.gradient_domain_amp_var.get() else 0
 
-            # Call the seam carving function
-            self.seam_image.amplify_content(amp_factor=target_factor, gradient_domain=gradient_domain_amp_var)
+            if self.cap is not None:
+                # Process all frames of a video
+                out = None
+                while True:
+                    # Call the seam carving function on current frame
+                    self.seam_image.amplify_content(amp_factor=target_factor, gradient_domain=gradient_domain_amp_var)
+                                      
+                    # Store current frame output
+                    if out is None:
+                        out_video_size = (self.seam_image.image.shape[1], self.seam_image.image.shape[0])
+                        out = cv2.VideoWriter(self.temp_output_file_name, self.fourcc, self.fps, out_video_size)
+                    
+                    image = self.seam_image.get_image().astype(np.uint8)
+                    # The returned image is in BGR
+                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                    
+                    out.write(image)
+                    
+                    # Read next frame
+                    ret, frame = self.cap.read()
+                    
+                    if not ret:
+                        print("End of file. Exiting ...")
+                        break                   
+                    
+                    # Initialize seam_image to next frame
+                    self.seam_image = SeamImage(None, color=True, image=frame)
+            else:
+                # Call the seam carving function
+                self.seam_image.amplify_content(amp_factor=target_factor, gradient_domain=gradient_domain_amp_var)
+                
             # Update display
             self.post_process()
         except tk.TclError:
@@ -374,11 +494,19 @@ class SeamCarvingGUI(tk.Frame):
         Save result image on disk
         :return: Nothing
         """
-        output_file_name = self.output_img_name.get() + '.png'
-        image = self.seam_image.get_image().astype(np.uint8)
-        # The returned image is in BGR
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        cv2.imwrite(output_file_name, image)
+        if self.cap is None:
+            output_file_name = self.output_img_name.get() + '.png'
+            image = self.seam_image.get_image().astype(np.uint8)
+            # The returned image is in BGR
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            cv2.imwrite(output_file_name, image)
+        else:
+            output_file_name = self.output_img_name.get() + '.mp4'
+            try:
+                os.rename(self.temp_output_file_name, output_file_name)
+            except Exception as e:
+                print(e)
+        
 
 
 if __name__ == '__main__':

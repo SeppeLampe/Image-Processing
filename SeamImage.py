@@ -5,13 +5,19 @@ import matplotlib.pyplot as plt
 import time
 
 class SeamImage:
-    def __init__(self, location, color=True):
+    def __init__(self, location, color=True, image=None):
         self.location = location
         # self.image is the current state of the image, will change continuously
-        if color:
-            self.image = cv2.cvtColor(cv2.imread(location), cv2.COLOR_BGR2RGB)
+        if self.location == None:
+            if color:
+                self.image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            else:
+                self.image = image
         else:
-            self.image = cv2.imread(location, cv2.IMREAD_GRAYSCALE)
+            if color:
+                self.image = cv2.cvtColor(cv2.imread(location), cv2.COLOR_BGR2RGB)
+            else:
+                self.image = cv2.imread(location, cv2.IMREAD_GRAYSCALE)
 
         self.added_seams = []  # Stores np.arrays containing the row/col indices that were added
         self.added_order = []  # Will store True/False based on whether a row or col was added respectively
