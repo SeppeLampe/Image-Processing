@@ -389,8 +389,8 @@ def remove_row_seam_numba(image, seam):
 
 
 def remove_mask(image, energy_function, mask_to_remove, mask_to_keep):
-    mask_to_remove = mask_to_remove.astype(np.int32)
-    mask_to_keep = mask_to_keep.astype(np.int32)
+    mask_to_remove = mask_to_remove.astype(np.float32)
+    mask_to_keep = mask_to_keep.astype(np.float32)
     # Find the row and column indices which contain at least one pixel to be removed
     remove_mask_rows, remove_mask_cols = np.where(mask_to_remove.any(axis=1))[0], np.where(mask_to_remove.any(axis=0))[0]
     remove_mask_height = np.max(remove_mask_rows) - np.min(remove_mask_rows)
@@ -402,9 +402,11 @@ def remove_mask(image, energy_function, mask_to_remove, mask_to_keep):
         seam_find_function = find_horizontal_seams
         seam_remove_function = remove_row_seam_numba
     # Assign a high negative value to each pixel in the remove mask and high positive value to those in the keep mask
-    mask = np.where(mask_to_remove, -100*mask_to_remove*np.max((mask_to_remove.shape[0], mask_to_remove.shape[1])), 0)
-    mask += 100*mask_to_keep*np.max((mask_to_remove.shape[0], mask_to_remove.shape[1]))
+    max_size = np.max((mask_to_remove.shape[0], mask_to_remove.shape[1]))
+    mask = np.where(mask_to_remove, -100*mask_to_remove*max_size, 0)
+    mask += 100*mask_to_keep*max_size
     mask_3d = np.repeat(mask[:, :, np.newaxis], 3, axis=2)
+    amount_to_remove = np.sum(mask_to_remove)
     while np.min(mask_3d) < 0:
         e_matrix = energy_function(image)
         # By adding mask3d, the seams will preferentially include pixels in the mask to be removed (negative values)
@@ -413,6 +415,15 @@ def remove_mask(image, energy_function, mask_to_remove, mask_to_keep):
         seam = seam_find_function(e_matrix)[0][0]
         image = seam_remove_function(image, seam)[0]
         mask_3d = seam_remove_function(mask_3d, seam)[0]
+        new_amount_to_remove = np.sum(np.where(mask_3d[:, :, 0] < 0, 1, 0))
+        if amount_to_remove == new_amount_to_remove:
+            # This happens when pixels to be removed are surrounded by pixels that cannot be removed
+            # This can be because either the user drew impossible masks (e.g., a red zone encircled by a green zone)
+            # Or this can also happen due to the seam carving process and is ~impossible to prevent
+            # If this happens then we'll stop otherwise we'll keep removing rows/columns until the image is more or less
+            # completely gone
+            break
+        amount_to_remove = new_amount_to_remove
     return image
 
 def process_gradient_domain(function, image, new_seam):
@@ -531,6 +542,7 @@ def add_column_seam_numba(image, seams):
     columns_to_add = len(seams)
     new_image = np.zeros((rows, cols+columns_to_add, colours))
     seams = seams.T
+    print(seams.shape, image.shape)
     for row_idx, row in enumerate(seams):
         new_row = np.zeros((cols + columns_to_add, colours))
         row = np.sort(row)

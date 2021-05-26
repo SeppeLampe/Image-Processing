@@ -31,6 +31,14 @@ class SeamImage:
 
     def reset(self):
         self.image = cv2.cvtColor(cv2.imread(self.location), cv2.COLOR_BGR2RGB)
+        self.reset_info()
+
+    def reset_info(self):
+        self.added_seams = []  # Stores np.arrays containing the row/col indices that were added
+        self.added_order = []  # Will store True/False based on whether a row or col was added respectively
+        self.removed_seams = []  # Stores np.arrays containing the row/col indices that were removed
+        self.removed_values = []  # Stores np.arrays containing the values that were removed
+        self.removed_order = []  # Will store True/False based on whether a row or col was removed respectively
 
     def remove_rows_and_cols(self, energy_function=sc.e1_colour_numba, rows=0, cols=0, gradient_domain=0):
         """
@@ -38,6 +46,7 @@ class SeamImage:
         :param energy_function: an energy function to apply for the seam carving
         :param rows: amount of rows to remove
         :param cols: amount of columns to remove
+        :param gradient_domain: gradient domain
         :return: Nothing
         """
         while self.added_order and (rows > 0 or cols > 0):
@@ -137,6 +146,7 @@ class SeamImage:
         original_rows, original_cols = self.image.shape[0], self.image.shape[1]
         self.image = sc.remove_mask(self.image, energy_function=energy_function, mask_to_remove=mask_to_remove, mask_to_keep=mask_to_keep)
         if keep_shape:
+            self.reset_info()
             self.resize(energy_function, original_rows, original_cols)
 
     def amplify_content(self, energy_function=sc.e1_colour_numba, amp_factor=1.2, gradient_domain=0):
@@ -151,7 +161,9 @@ class SeamImage:
         # Simply scale the image first
         self.image = cv2.resize(self.image, (int(cols*amp_factor), int(rows*amp_factor)))
         # Rescale it back to original size with seam carving
+        self.reset_info()
         self.resize(height=rows, width=cols, energy_function=energy_function, gradient_domain=gradient_domain)
+        self.reset_info()
 
 
 if __name__ == '__main__':
