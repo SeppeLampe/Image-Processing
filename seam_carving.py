@@ -277,12 +277,13 @@ def find_vertical_seams(e_matrix, amount=1):
     """
     :param e_matrix: The energy representation of an image, should be 2D numpy array
     :param amount: The number of vertical seams to find
-    :return:    (0) 2D numpy array, each ROW contains the COLUMN indices of a vertical seam path
+    :return:    (0) 2D numpy array, each ROW contains the COLUMN indices of a vertical seam path, will contain
+                    at least 1 and maximum 'amount' of seams, depending on how many can be formed
                 (1) the total energy of the minimal energy path of the last seam
     """
     e_matrix = e_matrix.astype(np.float32)
     rows, cols = e_matrix.shape
-    seams = np.zeros((amount, rows))
+    seams = np.zeros((amount, rows), dtype=np.uint16)
     for num in range(amount):
         # path_e will store the energy of the minimum energy path available for each pixel,
         # path will store the column index of the pixel above it with the minimal energy path
@@ -311,6 +312,10 @@ def find_vertical_seams(e_matrix, amount=1):
                     path[row_idx, col_idx] = min_nbr_idx
                     path_e[row_idx, col_idx] = e_matrix[row_idx, col_idx] + path_e[row_idx - 1, min_nbr_idx]
 
+        # If all values in the last row of path_e are inf then no seam can be formed anymore => stop here
+        if path_e[-1].min() == np.inf:
+            seams = seams[:num]  # Alter the shape of 'seams' so that it easy to find how many seams were actually found
+            break
         # Backtrack the minimal path from bottom to top
         seam_path = np.zeros(rows)  # Stores the column indices for pixels in the lowest energy path
         col_idx = path_e[-1].argmin()  # Find the pixel with lowest total energy path in the last row
@@ -332,7 +337,8 @@ def find_horizontal_seams(e_matrix, amount=1):
     """
     :param e_matrix: The energy of an image, should be a 2D numpy array
     :param amount: The number of vertical seams to find
-    :return:    (0) 2D numpy array, each ROW contains the ROW indices of a horizontal seam path
+    :return:    (0) 2D numpy array, each ROW contains the ROW indices of a horizontal seam path, will contain
+                    at least 1 and maximum 'amount' of seams, depending on how many can be formed
                 (1) the total energy of the minimal energy path of the last seam
     """
     return find_vertical_seams(e_matrix.T, amount)
@@ -542,7 +548,6 @@ def add_column_seam_numba(image, seams):
     columns_to_add = len(seams)
     new_image = np.zeros((rows, cols+columns_to_add, colours))
     seams = seams.T
-    print(seams.shape, image.shape)
     for row_idx, row in enumerate(seams):
         new_row = np.zeros((cols + columns_to_add, colours))
         row = np.sort(row)
@@ -592,19 +597,38 @@ def add_columns(image, energy_function, columns_to_add=1):
     # to you. So be wary of trying to add too much rows at a time! The higher the denominator, the less chance this has
     # of happening but also the higher the 'stretching artifacts' in the image will be. Perhaps we might include a check
     # to the 'find_vertical_seams' function to catch this.
-    denominator = 4
+    #
+    # Update: Check has finally been included (and quite efficiently), error shouldn't occur anymore
+
+    # We still want to maximally take half of the pixels, if we take 100% then we do a non-content aware resizing.
+    # Even though it is improbable we'll go over 50%, now it can never happen and thus we content-aware resize
+    denominator = 2
     while columns_to_add > 0:
-        if columns_to_add >= image.shape[0]//denominator:
-            amount = image.shape[0]//denominator
-        else:
-            amount = columns_to_add
+        amount = min(image.shape[1]//denominator, columns_to_add)
         energy_matrix = energy_function(image)
         new_seams = find_vertical_seams(energy_matrix, amount=amount)[0]
         image = add_column_seam_numba(image, new_seams)
+        # We'll have to make some alterations to the seam indices, they will be added 1 by 1 e.g., if I have two seams
+        # one with all indices = 10 and the other with all indices = 20, if we add the '10' seam first then the '20'
+        # seam should now point to '21' since all pixels after 10 will have shifted by 1.
+        new_seams = seams_converter(new_seams)
         seams.extend(new_seams)
-        columns_to_add -= amount
+        columns_to_add -= len(new_seams)
 
     return image.astype(np.uint8), seams
+
+
+@njit
+def seams_converter(seams):
+    """
+    :param seams: 2D numpy array of seams where each ROW is a seam
+    :return: 2D numpy array of seams with corrected indices
+    """
+    for idx, seam in enumerate(seams[::-1]):
+        seam_idx = len(seams) - idx - 1
+        for seam_col_idx, col_idx in enumerate(seam):
+            seams[seam_idx, seam_col_idx] += np.sum(np.where(seams[:seam_idx, seam_col_idx] < col_idx, 1, 0))
+    return seams
 
 
 def add_rows(image, energy_function, rows_to_add=1):
