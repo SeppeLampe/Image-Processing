@@ -419,7 +419,6 @@ def remove_mask(image, energy_function, mask_to_remove, mask_to_keep):
         # and exclude pixels in the mask to be kept (high positive values)
         e_matrix += mask_3d[:, :, 0]
         seam = seam_find_function(e_matrix)[0][0]
-        image = seam_remove_function(image, seam)[0]
         mask_3d = seam_remove_function(mask_3d, seam)[0]
         new_amount_to_remove = np.sum(np.where(mask_3d[:, :, 0] < 0, 1, 0))
         if amount_to_remove == new_amount_to_remove:
@@ -430,6 +429,7 @@ def remove_mask(image, energy_function, mask_to_remove, mask_to_keep):
             # completely gone
             break
         amount_to_remove = new_amount_to_remove
+        image = seam_remove_function(image, seam)[0]
     return image
 
 def process_gradient_domain(function, image, new_seam):
