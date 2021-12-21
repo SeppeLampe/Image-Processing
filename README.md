@@ -37,4 +37,4 @@ python gui.py
 ```
 
 The user interface is illustrated below.
-![GUI](gui.png)
+![GUI](Figures/gui.png)
