@@ -1,7 +1,7 @@
 # Image-Processing
 
-Project for the course 'Image Processing at VUB'. The topic is 'Image Retargeting &amp; Object Removal via Seam
-Carving'.
+Project for the course 'Image Processing' at VUB. The topic is 'Image Retargeting &amp; Object Removal via Seam
+Carving' based on the paper by [Avidan &amp; Shamir, 2007](https://github.com/SeppeLampe/Image-Processing/blob/main/Avidan%20%26%20Shamir%20(2007).pdf). The report for this project can be found [here](https://github.com/SeppeLampe/Image-Processing/blob/main/Project%20Report.pdf).
 
 ## Setup
 
